@@ -2,8 +2,23 @@ name = "cdown-get-latest"
 main = "src/index.js"
 compatibility_date = "2023-10-16"
 
+account_id = "98f57fdd7c87697f0d946a56cb6c4299"
+workers_dev = true
+
+r2_buckets  = [
+  { binding = "CDOWN_BUCKET", bucket_name = "cdown-raw-files"}
+]
+
+kv_namespaces = [
+  { binding = "CDOWN_KV", id = "4a4f0d181efb4c6688e3e6ead66720b0" }
+]
+
+send_email = [
+    {type = "send_email", name = "CDOWN_EMAIL", destination_address = "logs@rw251.com"},
+]
+
 # Cron Triggers
 # Docs: https://developers.cloudflare.com/workers/platform/triggers/cron-triggers/
 # Configuration: https://developers.cloudflare.com/workers/wrangler/configuration/#triggers
 [triggers]
-crons = ["* * * * *"] # * * * * * = run every minute
+crons = ["1 2 * * *"] # * * * * * = run every minute
