@@ -35,6 +35,24 @@ async function writeLog(env) {
 	await env.CDOWN_BUCKET.put('LOG', JSON.stringify(logFile));
 }
 
+async function internalGetEpisode({ episodeNumber }) {
+	const apterousUrl = 'http://wiki.apterous.org/index.php';
+	const html = await fetch(`${apterousUrl}?title=Episode_${episodeNumber}&action=edit`).then((resp) => resp.text());
+
+	logMessage(`Retrieved episode ${episodeNumber} now trying to process.`);
+
+	const textarea = html.match(/wpTextbox1[^>]+>([\s\S]+)<\/textarea>/);
+	//bfalse; // $('#wpTextbox1').val();
+	if (!textarea || !textarea.length || textarea.length < 2) {
+		// Nothing on that page - do something
+		// Write log and exit
+		return 'Nothing to see here';
+	}
+	const data = textarea[1];
+	const episode = parseEpisode(data, episodeNumber);
+	return { episode, data };
+}
+
 const getNextEpisode = async (env) => {
 	// Get most recent successful episode date
 	const LAST_SUCCESSFUL_EPISODE_DATE = await env.CDOWN_KV.get('LAST_SUCCESSFUL_EPISODE_DATE');
@@ -57,8 +75,6 @@ const getNextEpisode = async (env) => {
 	// Get most recent successful episode number
 	const LAST_SUCCESSFUL_EPISODE_NUMBER = await env.CDOWN_KV.get('LAST_SUCCESSFUL_EPISODE_NUMBER');
 
-	const apterousUrl = 'http://wiki.apterous.org/index.php';
-
 	const seriesData = await env.CDOWN_BUCKET.get(SERIES_FILE);
 	const series = seriesData ? await seriesData.json() : { Series_88: { a: '2023-06-30', b: '2023-10-20', c: 8051, d: 8131 } };
 
@@ -74,19 +90,8 @@ const getNextEpisode = async (env) => {
 	// const lastEpisode = await env.CDOWN_BUCKET.get(`${maxEpisode}.json`).then((resp) => resp.json());
 	const episodeNumber = +LAST_SUCCESSFUL_EPISODE_NUMBER + 1;
 	console.log(episodeNumber);
-	const html = await fetch(`${apterousUrl}?title=Episode_${episodeNumber}&action=edit`).then((resp) => resp.text());
 
-	logMessage(`Retrieved episode ${episodeNumber} now trying to process.`);
-
-	const textarea = html.match(/wpTextbox1[^>]+>([\s\S]+)<\/textarea>/);
-	//bfalse; // $('#wpTextbox1').val();
-	if (!textarea || !textarea.length || textarea.length < 2) {
-		// Nothing on that page - do something
-		// Write log and exit
-		return 'Nothing to see here';
-	}
-	const data = textarea[1];
-	const episode = parseEpisode(data, episodeNumber);
+	const { episode, data } = await internalGetEpisode({ episodeNumber });
 
 	if (!players[episode.p1.l]) {
 		players[episode.p1.l] = [];
@@ -221,6 +226,15 @@ export default {
 					'content-type': 'application/json;charset=UTF-8',
 				},
 			});
+		} else if (request.url.indexOf('get') > -1) {
+			const ep = +request.url.split('get')[1].replace(/[^0-9]/g, '');
+			const { episode, data } = await internalGetEpisode({ episodeNumber: ep });
+			const messages = log.getMessages();
+			return new Response(JSON.stringify({ message, episode, data }), {
+				headers: {
+					'content-type': 'application/json;charset=UTF-8',
+				},
+			});
 		} else {
 			// let data;
 			// try {
@@ -237,7 +251,7 @@ export default {
 			// logMessage('Seems to have worked!');
 			// await sendEmail(env, 'Countdown log', getMessages(), getMessages());
 
-			return new Response(JSON.stringify({ data }), {
+			return new Response('{}', {
 				headers: {
 					'content-type': 'application/json;charset=UTF-8',
 				},
