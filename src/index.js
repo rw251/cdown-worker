@@ -227,7 +227,7 @@ export default {
 				},
 			});
 		} else if (request.url.indexOf('get') > -1) {
-			const ep = +request.url.split('get')[1].replace(/[^0-9]/g, '');
+			const ep = +request.url.split('/get')[1].replace(/[^0-9]/g, '');
 			const { episode, data } = await internalGetEpisode({ episodeNumber: ep });
 			const messages = getMessages();
 			return new Response(JSON.stringify({ messages, episode, data }), {
