@@ -22,4 +22,4 @@ send_email = [
 # Cron Triggers
 [triggers]
 # Every hour Monday to Friday
-crons = ["1 * * * 1-5"]
+crons = ["1 * * * 2-6"]
