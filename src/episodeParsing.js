@@ -535,6 +535,7 @@ const processConundrumRound = (round, episodeNumber) => {
 };
 const processRound = (round, episodeNumber) => {
 	let rtn = {};
+	round = round.replace(/&amp;/g, '&');
 	if (round.indexOf('R-letters') > -1 || round.indexOf('Rx-letters') > -1) {
 		rtn = { ...processLettersRound(round, episodeNumber), tp: 'letters' };
 		if (rtn.failed) {
