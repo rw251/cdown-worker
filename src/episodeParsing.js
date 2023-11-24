@@ -543,6 +543,9 @@ const processRound = (round, episodeNumber) => {
 			delete rtn.failed;
 		}
 	} else if (round.indexOf('R-numbers') > -1) {
+		round = round.replace('&mdash;', '-'); // trying to fix pesky issue with &mdash; string comparison
+		// might need this for letters as well, but doesn't seem to
+		// break it so far
 		rtn = { ...processNumbersRound(round, episodeNumber), tp: 'numbers' };
 		if (rtn.failed) {
 			delete rtn.tp;

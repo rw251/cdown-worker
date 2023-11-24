@@ -57,3 +57,61 @@ test('Parses episode', () => {
 	console.log(y);
 	expect(y.length).toBe(0);
 });
+
+test('Parses episode', () => {
+	const data = `{{episode|previous=Episode 8109|next=Episode 8111}}
+'''Episode 8110''' was broadcast on 21 September 2023, as part of [[Series 88]].
+
+[[Paul O'Brien]] played [[Ravi Jay]], with Paul O'Brien winning {{score|103|16}}. The [[Dictionary Corner]] guest was [[Chris McCausland]], and the [[lexicographer]] was [[Susie Dent]].
+
+NOTE: The [[conundrum]] had two valid solutions – {{word|CERTAINLY}} and {{word|CLIENTARY}}.
+
+==Rounds==
+{{Rounds-start|Paul O'Brien|Ravi Jay}}
+{{R-letters  |1 |NFOERHODI|HORNED   |honored {{x}}|FORDONE*            |  6|0  |  7}}
+{{R-letters  |2 |EIERBSRSM|MESSIER  |MISER    |BEMIRES*, BERRIES, BIREMES*, MERISES*, MISERES*, REMISES*, RIBESES*| 13|0  | 14}}
+{{R-numbers  |3 | 25|6|3|8|1|7| 961
+|958|sol1=(7 × 6 − 3 − 1) × 25 + 8
+|&mdash;
+|other=961|solother=(25 + 7) × (8 × 3 + 6) + 1
+|20|0|24}}
+{{R-TTT         |EATBEANS|Do they keep the Irishmen on the straight and narrow?|BANATEES}}
+{{R-letters  |4 |OEOPDGYDR|POGOED   |DODGER   |DROOPED, GODDERY*   | 26|6  | 31}}
+{{R-letters  |5 |VBEALDUNO|UNLOVED  |UNABLE   |UNDOABLE            | 33|6  | 39}}
+{{R-numbers  |6 | 75|25|100|50|9|8| 117
+|117|sol1=100 + 75 + 9 + 8 − 50 − 25
+|117|sol2=100 + 9 + 8
+|43|16|49}}
+{{R-letters  |7 |PTSEAPEDR|STRAPPED |SPEARED  |PEDERAST*, PREDATES*, PRETAPED*, PRETAPES*, TRAPESED*| 51|16 | 57}}
+{{R-letters  |8 |AIENKDTWS|STAINED  |stinked {{x}}|WANKIEST*           | 58|16 | 65}}
+{{R-numbers  |9 | 75|9|8|3|10|6| 710
+|710|sol1=(75 − (6 − 3 + 9 − 8)) × 10
+|711
+|68|16|75}}
+{{R-TTT         |RATEHEAD|The beverage of choice for some online factions.|HATERADE}}
+{{R-letters  |10|UOECRGNAG|COURAGE  |GAUGE    |EGGCORN*            | 75|16 | 82}}
+{{R-letters  |11|EOASLTNIR|LOANERS  |ROAST    |ORIENTALS*, RELATIONS, ROTALINES*, TENSORIAL*| 82|16 |100}}
+{{R-letters  |12|EOISRNJMC|REJOINS  |NOISE    |INCOMERS*, SERMONIC | 89|16 |108}}
+{{R-letters  |13|UAENTMSIM|AUNTIES  | &mdash; |MANUMISE*, MANUMITS, MAUNTIES*, MISMEANT*| 96|16 |116}}
+{{R-numbers  |14| 50|25|75|100|6|6| 832
+|831|sol1=(100 + 25) × 6 + 75 + 6
+|825
+|other=832|solother=((75 − 6) × 50 × 6 + 100) ÷ 25
+|103|16|126}}
+{{R-conundrum|15|NEILTRACY|sol=CERTAINLY**|103|16|136}}
+{{Rounds-end}}
+
+{{DEFAULTSORT:8110}}
+[[Category:15-round games]]
+[[Category:Episodes in Series 88]]
+[[Category:15-round scores under 30]]
+[[Category:Episodes presented by Colin Murray]]
+[[Category:Episodes with Rachel Riley as arithmetician]]
+[[Category:Episodes with Susie Dent as lexicographer]]
+[[Category:Episodes with Chris McCausland as a guest]]
+[[Category:Episodes affected by administrative errors]]`;
+	const x = parseEpisode(data, 8110);
+	const y = getMessages();
+	console.log(y);
+	expect(y.length).toBe(0);
+});
