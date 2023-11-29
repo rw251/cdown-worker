@@ -46,7 +46,7 @@ async function internalGetEpisode({ episodeNumber }) {
 	if (!textarea || !textarea.length || textarea.length < 2) {
 		// Nothing on that page - do something
 		// Write log and exit
-		return 'Nothing to see here';
+		return { nodatayet: true };
 	}
 	const data = textarea[1];
 	const episode = parseEpisode(data, episodeNumber);
@@ -91,8 +91,11 @@ const getNextEpisode = async (env) => {
 	const episodeNumber = +LAST_SUCCESSFUL_EPISODE_NUMBER + 1;
 	console.log(episodeNumber);
 
-	const { episode, data } = await internalGetEpisode({ episodeNumber });
+	const { episode, data, nodatayet } = await internalGetEpisode({ episodeNumber });
 
+	if (nodatayet) {
+		return false;
+	}
 	if (!players[episode.p1.l]) {
 		players[episode.p1.l] = [];
 	}
@@ -167,19 +170,19 @@ export default {
 			if (!data) return;
 		} catch (e) {
 			await sendEmail(env, 'Countdown errors', e, e);
-			return new Response(JSON.stringify({ error: true }), {
-				headers: {
-					'content-type': 'application/json;charset=UTF-8',
-				},
-			});
+			// return new Response(JSON.stringify({ error: true }), {
+			// 	headers: {
+			// 		'content-type': 'application/json;charset=UTF-8',
+			// 	},
+			// });
 		}
 		logMessage('Seems to have worked!');
 		await sendEmail(env, 'Countdown log', getMessages(), getMessages());
 	},
 
 	async fetch(request, env) {
-		//await env.CDOWN_KV.put('LAST_SUCCESSFUL_EPISODE_NUMBER', '8121');
-		//return;
+		// await env.CDOWN_KV.put('LAST_SUCCESSFUL_EPISODE_NUMBER', '8157');
+		// return;
 		initLog();
 		if (request.url.indexOf('init') > -1) {
 			const date = new Date();
