@@ -176,6 +176,7 @@ export default {
 			if (!data) return;
 		} catch (e) {
 			await sendEmail(env, 'Countdown errors', e, e);
+			return;
 			// return new Response(JSON.stringify({ error: true }), {
 			// 	headers: {
 			// 		'content-type': 'application/json;charset=UTF-8',
