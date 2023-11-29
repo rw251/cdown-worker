@@ -111,6 +111,8 @@ async function doSeries(env, episode) {
 		series[s].a = series[s].a.toISOString().substr(0, 10);
 		series[s].b = series[s].b.toISOString().substr(0, 10);
 	});
+
+	return series;
 }
 
 const getNextEpisode = async (env) => {
