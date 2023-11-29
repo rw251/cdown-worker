@@ -115,3 +115,59 @@ NOTE: The [[conundrum]] had two valid solutions – {{word|CERTAINLY}} and {{wor
 	console.log(y);
 	expect(y.length).toBe(0);
 });
+
+test('Parses episode', () => {
+	const data = `{{episode|previous=Episode 8155|next=Episode 8157}}
+'''Episode 8156''' was broadcast on 24 November 2023, as part of [[Series 88]].
+
+[[Stuart Kerr]] played [[David Haxton]], with Stuart Kerr winning {{score|108|38}}. The [[Dictionary Corner]] guest was [[Daliso Chaponda]], and the [[lexicographer]] was [[Susie Dent]].
+
+==Rounds==
+{{Rounds-start|Stuart Kerr|David Haxton}}
+{{R-letters  |1 |DGTEAZHSU|STAGED   |GATED    |AUGHTS*, DEATHS*, DEGUST*, DETAGS*, GASHED*, GAUZES*, GUSHED, GUSTED, HASTED*, HUGEST*, SAUTED*, TASHED*|  6|0  |  6}}
+{{R-letters  |2 |DNIKOBFEM|BOINKED  |BONKED   |                    | 13|0  | 13}}
+{{R-numbers  |3 | 25|7|2|3|4|6| 521
+|521|sol1=7 × 3 × 25 &minus; 4
+|—
+|23|0|23}}
+{{R-TTT         |USEAGIFT|Tires quickly in the soldier's clothing.|FATIGUES}}
+{{R-letters  |4 |TASGIPOLU|SPOILT   |GUSTO    |AGOUTIS*, GALIOTS*, GALIPOT, OUTSAIL*, PAILOUS*, PATOLUS*, POTAILS*, PUTLOGS*, TOPSAIL*, UTOPIAS*| 29|0  | 30}}
+{{R-letters  |5 |AESWROFLC|FLOWERS  |FLOWERS  |AFLOWER*, COALERS*, ESCOLAR*, FORESAW, FOWLERS*, LOAFERS*, ORACLES*, RECOALS*, REFLOWS*, SCOWLER*| 36|7  | 37}}
+{{R-numbers  |6 | 50|75|3|9|1|3| 465
+|{{timedout|467}}
+|460|sol2=(3 + 3) × 75 + 9 + 1
+|rr=465|solrr=(50 + 1) × 9 + 3 + 3
+|36|14|47}}
+{{R-letters  |7 |TNPUOESRN|PUNTERS  |PUNTERS  |NEUTRONS*, PRENOUNS*, UNPERSON| 43|21 | 55}}
+{{R-letters  |8 |HIDETSAPR|HARDIEST |SHADIER  |THERAPSID           | 51|21 | 73}}
+{{R-numbers  |9 | 25|100|6|7|7|5| 264
+|263|sol1=(100 + 25) × (7 &minus; 5) + 7 + 6
+|267
+|rr=264|solrr=(6 + 5) × (25 &minus; 7 ÷ 7)
+|58|21|83}}
+{{R-TTT         |CRUDEOIL|{{w|Claudia Schiffer|Miss Schiffer}}'s not enjoying the best of weather.|CLOUDIER}}
+{{R-letters  |10|MEDTOLNES|MOLESTED |detones {{x}}|TEENDOMS*           | 66|21 | 91}}
+{{R-letters  |11|IAGBTSOIM|BIGAMIST |MOIST    |BIGOTISM            | 74|21 | 99}}
+{{R-letters  |12|CURTEYNAL|LARCENY  |LANCER   |CENTAURY            | 81|21 |107}}
+{{R-letters  |13|RWNIOERDS|WONDERS  |WORRIES  |DISOWNER*, DROWSIER, INDORSER*| 88|28 |115}}
+{{R-numbers  |14| 75|50|8|7|10|10| 520
+|520|sol1=(10 &minus; 8 + 50) × 10
+|520|sol2=75 × 7 &minus; 50 ÷ 10
+|98|38|125}}
+{{R-conundrum|15|TRUCEPLUS|c1time=3|c1sol=SCULPTURE|108|38|135}}
+{{Rounds-end}}
+
+{{DEFAULTSORT:8156}}
+[[Category:15-round games]]
+[[Category:Episodes in Series 88]]
+[[Category:Episodes presented by Colin Murray]]
+[[Category:Episodes with Rachel Riley as arithmetician]]
+[[Category:Episodes with Susie Dent as lexicographer]]
+[[Category:Episodes with Daliso Chaponda as a guest]]
+`;
+	const x = parseEpisode(data, 8156);
+	expect(x.r[5]['1-sol']).toBe(false);
+	const y = getMessages();
+	console.log(y);
+	expect(y.length).toBe(0);
+});

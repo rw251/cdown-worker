@@ -377,6 +377,10 @@ const validateNumberDeclaration = (declares, solution, round, failed, episodeNum
 		// valid (possibly) but too far away
 		solution = '';
 		declares = +declares;
+	} else if (solution.toLowerCase() === 'timedout') {
+		// timed out when asked for solution
+		declares = +declares;
+		solution = false;
 	} else {
 		logMessage(`In episode ${episodeNumber} error with round. Declares is ${declares}, solution is ${solution}, round is ${round}`);
 	}
@@ -390,12 +394,16 @@ const processNumbersRound = (round, episodeNumber) => {
 	let failed = false;
 	if (p1Declares === 'nwd') {
 		[p1Declares, p1Solution] = [p1Solution, ''];
+	} else if (p1Declares === 'timedout') {
+		[p1Declares, p1Solution] = [p1Solution, p1Declares];
 	} else if (p1Solution.toLowerCase().indexOf('sol') < 0) {
 		[p2Declares, p2Solution, best, bestSol] = [p1Solution, p2Declares, p2Solution, best];
 		p1Solution = '';
 	}
 	if (p2Declares === 'nwd') {
 		[p2Declares, p2Solution] = [p2Solution, ''];
+	} else if (p2Declares === 'timedout') {
+		[p2Declares, p2Solution] = [p2Solution, p2Declares];
 	} else if (p2Solution.toLowerCase().indexOf('sol') < 0) {
 		[best, bestSol] = [p2Solution, best];
 		p2Solution = '';
