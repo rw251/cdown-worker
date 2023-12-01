@@ -171,3 +171,57 @@ test('Parses episode', () => {
 	console.log(y);
 	expect(y.length).toBe(0);
 });
+
+test('Parses episode', () => {
+	const data = `{{episode|previous=Episode 8160|next=Episode 8162}}
+'''Episode 8161''' was broadcast on 1 December 2023, as part of [[Series 88]].
+
+[[Naomi Raanan]], played [[JJ Burrows]] with JJ Burrows winning {{score|75|65}}. The [[Dictionary Corner]] guest was [[Richard Coles]], and the [[lexicographer]] was [[Susie Dent]].
+
+==Rounds==
+{{Rounds-start|Naomi Raanan|JJ Burrows }}
+{{R-letters  |1 |SGREUONMI|ROUSING |mongers {{x}}  |MURGEONS*, RESUMING, ROUGINES*, SOIGNEUR*|  7|0  | 8}}
+{{R-letters  |2 |BTASOELNE|NOTABLE   |bloatens {{x}}   |BONELETS*, NEOBLAST*, NESTABLE*, NOTABLES           | 14|0  | 16}}
+{{R-numbers  |3 | 50|6|10|8|5|3| 604
+|608
+|604|sol2=(50 + 3 + 8) × 10 − 6
+|14|10|26}}
+{{R-TTT         |DANISTHE|Dan is the best when it comes to home maintenance.|HANDIEST}}
+{{R-letters  |4 |CIAZRUPNE|PRANCE   |PINCER   |CAPRINE, RINCEAU*| 20|16 | 33}}
+{{R-letters  |5 |TLHIOUNQE|QUILT    |untile {{x}}   |QUINTOLE* | 25|16 | 41}}
+{{R-numbers  |6 | 25|100|6|5|3|4| 444
+|443
+|444|sol2=(100 + 6 + 5) × 4
+|25|26|51}}
+{{R-letters  |7 |SMAURTEIC|MASTER  |MATURES  |CERASTIUM | 25|33 | 69}}
+{{R-letters  |8 |RDWEOLTAI|TRAILED |TRAILED    |IDOLATER, LEADWORT*, TAILORED*| 32|40 | 77}}
+{{R-numbers  |9 | 75|9|3|3|2|2| 750
+|750|sol1=(2 ÷ 2 + 9) × 75
+|750|sol2=(3 ÷ 3 + 9) × 75
+|42|50|87}}
+{{R-TTT         |DUSTMINE|The guitar player could not find his keys.|MISTUNED}}
+{{R-letters  |10|KGDOETSIN|ignites {{x}}  |STOKING  |KENDOIST* | 42|57 | 95}}
+{{R-letters  |11|PCGAOUYBS|COUPS    |BUOYS |BASUCO*, BAYOUS, BOYAUS*, COPAYS*, COYPUS            | 47|62 | 101}}
+{{R-letters  |12|NDLEISATL|INSTALLED   |STALLED   |DEINSTALL | 65|62 |119}}
+{{R-letters  |13|JNRFOAEGO|FORGE |ORANGE   |FORGONE, JARGOON*, OREGANO*, ROOFAGE*| 65|68 |126}}
+{{R-numbers  |14| 75|50|1|7|6|2| 817
+|-
+|814|sol2=(6 + 7 − 2) × (75 − 1)
+|rr=817|solrr=(50 × 2 + 6) × 7 + 75
+|65|75|136}}
+{{R-conundrum|15|TYLERNOIS|sol=STORYLINE|65|75|146}}
+{{Rounds-end}}
+
+{{DEFAULTSORT:8161}}
+[[Category:15-round games]]
+[[Category:Episodes in Series 88]]
+[[Category:Episodes presented by Colin Murray]]
+[[Category:Episodes with Rachel Riley as arithmetician]]
+[[Category:Episodes with Susie Dent as lexicographer]]
+[[Category:Episodes with Richard Coles as a guest]]
+`;
+	const x = parseEpisode(data, 8161);
+	const y = getMessages();
+	console.log(y);
+	expect(y.length).toBe(0);
+});

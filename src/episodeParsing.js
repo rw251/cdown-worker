@@ -123,7 +123,7 @@ const getEpisodeDateAndSeries = (data, epNumberShouldBe) => {
 const getPlayersAndWinner = (data, n) => {
 	if (+n === 3 || +n === 8) return {}; // two early draws - but no info so skip
 	let [, player1, player2, winner, winScore, loseScore, winScore2, loseScore2] = data.match(
-		/\[\[([^\]]+)\]\] (?:\([^)]+\) )?played[^[]+\[\[([^\]]+)\]\],?.*with (.*) (?:winning ?(?:\{\{[Ss]core\|([0-9]+)\|([0-9]+)|([0-9]+)[^0-9]+([0-9]+))?|([0-9]+)(-all) draw)/
+		/\[\[([^\]]+)\]\][ ,]*(?:\([^)]+\) )?played[^[]+\[\[([^\]]+)\]\],?.*with (.*) (?:winning ?(?:\{\{[Ss]core\|([0-9]+)\|([0-9]+)|([0-9]+)[^0-9]+([0-9]+))?|([0-9]+)(-all) draw)/
 	);
 	if (loseScore === 'all') {
 		loseScore = winScore;
