@@ -72,8 +72,11 @@ async function doPlayers(env, episode) {
 }
 
 async function doSeries(env, episode) {
-	const seriesData = await env.CDOWN_BUCKET.get(SERIES_FILE);
-	const series = seriesData ? await seriesData.json() : { Series_88: { a: '2023-06-30', b: '2023-10-20', c: 8051, d: 8131 } };
+	const allSeriesData = await env.CDOWN_BUCKET.get(SERIES_FILE);
+	const thisSeriesFile = `series-${episode.s.l}.json`;
+	const thisSeriesData = await env.CDOWN_BUCKET.get(thisSeriesFile);
+	const thisSeries = thisSeriesData ? await thisSeriesData.json() : {};
+	const series = allSeriesData ? await allSeriesData.json() : { Series_88: { a: '2023-06-30', b: '2023-10-20', c: 8051, d: 8131 } };
 
 	Object.keys(series).forEach((key) => {
 		series[key].a = new Date(series[key].a);
@@ -106,6 +109,10 @@ async function doSeries(env, episode) {
 			series[episode.s.l].b = episode.d;
 		}
 	}
+
+	thisSeries[episode.e] = { d: episode.d };
+
+	await env.CDOWN_BUCKET.put(thisSeriesFile, JSON.stringify(thisSeries));
 
 	Object.keys(series).forEach((s) => {
 		series[s].a = series[s].a.toISOString().substr(0, 10);
