@@ -233,7 +233,7 @@ const validateDeclaration = (dec, round, episodeNumber) => {
 		valid = false;
 		length = +dec;
 		word = '';
-	} else if (dec === '&mdash;' || dec === '—' || dec === '-') {
+	} else if (dec === '&mdash;' || dec === '—' || dec === '-' || dec === '−') {
 		// No declaration
 		valid = false;
 		length = 0;
@@ -357,7 +357,7 @@ const validateNumberDeclaration = (declares, solution, round, failed, episodeNum
 		// made a declaration but then messed it up
 		declares = +declares.split(' ')[0];
 		solution = false;
-	} else if (declares === '&mdash;' || declares === '—' || declares === '-') {
+	} else if (declares === '&mdash;' || declares === '—' || declares === '-' || declares === '−') {
 		// nowhere near
 		declares = 0;
 		solution = '';
