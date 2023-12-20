@@ -357,7 +357,7 @@ const validateNumberDeclaration = (declares, solution, round, failed, episodeNum
 		// made a declaration but then messed it up
 		declares = +declares.split(' ')[0];
 		solution = false;
-	} else if (declares === '&mdash;' || declares === '—' || declares === '-' || declares === '−') {
+	} else if (declares === '&mdash;' || declares === '—' || declares === '-' || declares === '−' || declares === 'x') {
 		// nowhere near
 		declares = 0;
 		solution = '';
