@@ -609,6 +609,10 @@ const processRounds = (data, episodeNumber) => {
 
 const parseEpisode = (episode, i) => {
 	const { episodeNumber, firstShownDate, seriesNumber, seriesType, seriesLink } = getEpisodeDateAndSeries(episode, i);
+	if (i === 7779 && !episodeNumber) {
+		// episode pulled
+		return false;
+	}
 	if (i > 0 && !episodeNumber) throw new Error('Could not parse date or series');
 	const presenter = getPresenter(episode);
 	const arithmetician = getArith(episode);

@@ -50,6 +50,7 @@ async function internalGetEpisode({ episodeNumber }) {
 	}
 	const data = textarea[1];
 	const episode = parseEpisode(data, episodeNumber);
+	if (!episode) return { nodatayet: true };
 	return { episode, data };
 }
 
@@ -247,7 +248,15 @@ export default {
 			});
 		} else if (request.url.indexOf('get') > -1) {
 			const ep = +request.url.split('/get')[1].replace(/[^0-9]/g, '');
-			const { episode, data } = await internalGetEpisode({ episodeNumber: ep });
+			const { episode, data, nodatayet } = await internalGetEpisode({ episodeNumber: ep });
+
+			if (nodatayet) {
+				return new Response(JSON.stringify({ message: 'Episode not retrieved. Likely pulled from broadcast.' }), {
+					headers: {
+						'content-type': 'application/json;charset=UTF-8',
+					},
+				});
+			}
 
 			const players = await doPlayers(env, episode);
 			const series = await doSeries(env, episode);
