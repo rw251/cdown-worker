@@ -189,6 +189,12 @@ const validateDeclaration = (dec, round, episodeNumber) => {
 		valid = false;
 		word = dec.match(/^([a-z]+) +x$/)[1].toUpperCase();
 		({ length } = word);
+	} else if (dec.search(/^x +[a-z]+$/) === 0) {
+		// CHECKED
+		// Alternative invalid declaration e.g. x badger
+		valid = false;
+		word = dec.match(/^x +([a-z]+)$/)[1].toUpperCase();
+		({ length } = word);
 	} else if (dec.search(/^[A-Z]+ +X$/) === 0) {
 		// CHECKED
 		// Invalid declaration because not written down BUT also would have been disallowed
