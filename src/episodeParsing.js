@@ -239,7 +239,7 @@ const validateDeclaration = (dec, round, episodeNumber) => {
 		valid = false;
 		length = +dec;
 		word = '';
-	} else if (dec === '&mdash;' || dec === '—' || dec === '-' || dec === '−') {
+	} else if (dec === '&mdash;' || dec === '—' || dec === '-' || dec === '−' || dec === 'x') {
 		// No declaration
 		valid = false;
 		length = 0;
@@ -303,7 +303,7 @@ const processLettersRound = (round, episodeNumber) => {
 			p2Declares = dicCorner;
 			dicCorner = next;
 		}
-		if (p1Declares === 'misdeclared') {
+		if (p1Declares.indexOf('misdeclared') > -1) {
 			// not written down so shift
 			p1Length = dicCorner;
 			p1Valid = false;
@@ -311,7 +311,7 @@ const processLettersRound = (round, episodeNumber) => {
 			p2Declares = next;
 			dicCorner = next2;
 			[p2Declares, p2Length, p2Valid, failed] = validateDeclaration(p2Declares, round, episodeNumber);
-		} else if (p2Declares === 'misdeclared') {
+		} else if (p2Declares.indexOf('misdeclared') > -1) {
 			p2Length = next;
 			p2Valid = false;
 			p2Declares = dicCorner.toUpperCase();
@@ -505,6 +505,9 @@ const processConundrumRound = (round, episodeNumber) => {
 			if (round.indexOf('c2sol') > -1) {
 				if (round.search(/c2sol=[a-z]+ [^|]*x/) > -1) {
 					p2Sol = round.match(/c2sol=([a-z]+) /)[1].toUpperCase();
+					p2Valid = false;
+				} else if (round.search(/c2sol=[x☓X] [a-z]+/) > -1) {
+					p2Sol = round.match(/c2sol=[x☓X] ([a-z]+)/)[1].toUpperCase();
 					p2Valid = false;
 				} else if (round.search(/c2sol=\?? ?\{?\{?[x☓X]\}?\}?\|/) > -1) {
 					p2Sol = '';
