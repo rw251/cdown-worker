@@ -493,6 +493,9 @@ const processConundrumRound = (round, episodeNumber) => {
 				} else if (round.search(/c1sol= *[A-Za-zÀ-ÖØ-öø-ÿ.]+ [^|]*[x☓X]/) > -1) {
 					p1Sol = round.match(/c1sol= *([a-z]+)/)[1].toUpperCase();
 					p1Valid = false;
+				} else if (round.replace(/ /g, '').search(/c1sol=[x☓X]/) > -1) {
+					p1Sol = '';
+					p1Valid = false;
 				} else {
 					p1Sol = round.match(/c1sol=([A-Z]+)/)[1];
 					p1Valid = true;
@@ -514,6 +517,9 @@ const processConundrumRound = (round, episodeNumber) => {
 					p2Valid = false;
 				} else if (round.search(/c2sol= *[A-Za-zÀ-ÖØ-öø-ÿ.]+ [^|]*[x☓X]/) > -1) {
 					p2Sol = round.match(/c2sol= *([a-z]+)/)[1].toUpperCase();
+					p2Valid = false;
+				} else if (round.replace(/ /g, '').search(/c2sol=[x☓X]/) > -1) {
+					p2Sol = '';
 					p2Valid = false;
 				} else {
 					p2Sol = round.match(/c2sol=([A-Z]+)/)[1];
