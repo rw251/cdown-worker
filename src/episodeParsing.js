@@ -53,7 +53,7 @@ const getEpisodeDateAndSeries = (data, epNumberShouldBe) => {
 		};
 	}
 	let [, episodeNumber, firstShownDate, series] = data.match(
-		/Episode (Z?D?[0-9]+)''' *was (?:scheduled to be )?broadcast on ([^,[:]+),?(?: as| at| and| was| immediately (?:after|before) \[\[(?:[^\]]+)\]\])[^[]+\[\[([^\]]+)\]\]/
+		/Episode (Z?D?[0-9]+)(?:''')? *was (?:scheduled to be )?broadcast on ([^,[:]+),?(?: as| at| and| was| immediately (?:after|before) \[\[(?:[^\]]+)\]\])[^[]+\[\[([^\]]+)\]\]/
 	);
 	// '''Episode 7652''' was scheduled to be broadcast on 3 December 2021, as part of [[Series 84]].
 	if (episodeNumber.indexOf('ZD') < 0) episodeNumber = +episodeNumber;
