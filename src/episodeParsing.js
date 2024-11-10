@@ -589,7 +589,10 @@ const processRound = (round, episodeNumber) => {
 
 const processRounds = (data, episodeNumber) => {
 	if (data.indexOf('Rounds-start') < 0) return [];
-	let rounds = data.match(/Rounds-start(?:.|[\r\n])+Rounds-end/g)[0].replace(/[{}]/g, '');
+	let rounds =
+		data.indexOf('Rounds-end') < 0
+			? data.match(/Rounds-start(?:.|[\r\n])+\n\n/g)[0].replace(/[{}]/g, '')
+			: data.match(/Rounds-start(?:.|[\r\n])+Rounds-end/g)[0].replace(/[{}]/g, '');
 	let numbersIndex = rounds.indexOf('R-numbers');
 	while (numbersIndex > -1) {
 		let nextLettersIndex = rounds.indexOf('R-letters', numbersIndex);
