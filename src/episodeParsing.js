@@ -394,6 +394,7 @@ const validateNumberDeclaration = (declares, solution, round, failed, episodeNum
 };
 
 const processNumbersRound = (round, episodeNumber) => {
+	console.log(round);
 	let [, , n1, n2, n3, n4, n5, n6, target, p1Declares, p1Solution, p2Declares, p2Solution, best, bestSol] = round
 		.split('|')
 		.map((x) => x.trim());
@@ -418,6 +419,11 @@ const processNumbersRound = (round, episodeNumber) => {
 	if (otherMatch && otherMatch.length === 3) {
 		best = otherMatch[1];
 		bestSol = otherMatch[2];
+	}
+	const anonMatch = round.match(/(a=[0-9]+)\|(sola=[^|]+)\|/i);
+	if (anonMatch && anonMatch.length === 3) {
+		best = anonMatch[1];
+		bestSol = anonMatch[2];
 	}
 
 	if (target.indexOf('?') > -1 || target === '' || p1Declares === '?' || p2Declares === '?') {
