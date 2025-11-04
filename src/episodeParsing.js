@@ -33,7 +33,7 @@ const getGuest = (data) => {
 	if (guests.length > 1) return guests;
 	return guests[0];
 };
-const getEpisodeDateAndSeries = (data, epNumberShouldBe) => {
+const getEpisodeDateAndSeries = (data, epNumberShouldBe, isUpdate) => {
 	// Quick check in case episode pulled from broadcast
 	let pulledMatch = data.match(/broadcast on ([^,[:]+).*pulled( from)?( the)? broadcast/);
 	if (pulledMatch) {
@@ -65,7 +65,7 @@ const getEpisodeDateAndSeries = (data, epNumberShouldBe) => {
 		logMessage(`In episode ${epNumberShouldBe} the parsed episode number is actually ${episodeNumber}`);
 		return {};
 	}
-	if (episodeNumber > 1 && firstShownDate < lastFirstShownDate) {
+	if (episodeNumber > 1 && firstShownDate < lastFirstShownDate && !isUpdate) {
 		logMessage(`Episode ${episodeNumber} is shown before the previous episode`);
 		return {};
 	}
@@ -631,8 +631,8 @@ const processRounds = (data, episodeNumber) => {
 		.filter((x) => x.tp);
 };
 
-const parseEpisode = (episode, i) => {
-	const { episodeNumber, firstShownDate, seriesNumber, seriesType, seriesLink } = getEpisodeDateAndSeries(episode, i);
+const parseEpisode = (episode, i, isUpdate) => {
+	const { episodeNumber, firstShownDate, seriesNumber, seriesType, seriesLink } = getEpisodeDateAndSeries(episode, i, isUpdate);
 	if (i === 7779 && !episodeNumber) {
 		// episode pulled
 		return false;

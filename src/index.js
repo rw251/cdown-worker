@@ -35,7 +35,7 @@ async function writeLog(env) {
 	await env.CDOWN_BUCKET.put('LOG', JSON.stringify(logFile));
 }
 
-async function internalGetEpisode({ episodeNumber }) {
+async function internalGetEpisode({ episodeNumber, isUpdate = false }) {
 	const apterousUrl = 'http://wiki.apterous.org/index.php';
 	const html = await fetch(`${apterousUrl}?title=Episode_${episodeNumber}&action=edit`).then((resp) => resp.text());
 
@@ -49,7 +49,7 @@ async function internalGetEpisode({ episodeNumber }) {
 		return { nodatayet: true };
 	}
 	const data = textarea[1];
-	const episode = parseEpisode(data, episodeNumber);
+	const episode = parseEpisode(data, episodeNumber, isUpdate);
 	if (!episode) return { nodatayet: true };
 	return { episode, data };
 }
@@ -123,6 +123,77 @@ async function doSeries(env, episode) {
 	return series;
 }
 
+async function checkAndUpdatePreviousEpisodes(env, latestEpisodeNumber) {
+	const updatedEpisodes = [];
+
+	// Check previous 4 episodes
+	const episodesToCheck = [latestEpisodeNumber - 1, latestEpisodeNumber - 2, latestEpisodeNumber - 3, latestEpisodeNumber - 4];
+
+	for (const episodeNumber of episodesToCheck) {
+		try {
+			// Fetch the latest version from wiki
+			const { episode: newEpisode, data: newData, nodatayet } = await internalGetEpisode({ episodeNumber, isUpdate: true });
+
+			if (nodatayet) {
+				logMessage(`Episode ${episodeNumber} not available for recheck (possibly pulled).`);
+				continue;
+			}
+
+			// Get the existing stored version from R2
+			const existingEpisodeData = await env.CDOWN_BUCKET.get(`${episodeNumber}.json`);
+
+			if (!existingEpisodeData) {
+				logMessage(`Episode ${episodeNumber} not found in storage, skipping recheck.`);
+				continue;
+			}
+
+			const existingEpisode = await existingEpisodeData.json();
+
+			// Compare the episodes (stringify for deep comparison)
+			const existingStr = JSON.stringify(existingEpisode);
+			const newStr = JSON.stringify(newEpisode);
+
+			if (existingStr !== newStr) {
+				logMessage(`Episode ${episodeNumber} has been updated on the wiki!`);
+
+				// Update storage with new version
+				await env.CDOWN_KV.put(episodeNumber, newData);
+				await env.CDOWN_BUCKET.put(`${episodeNumber}.json`, JSON.stringify(newEpisode));
+
+				// Update players and series data
+				await doPlayers(env, newEpisode);
+				await doSeries(env, newEpisode);
+
+				updatedEpisodes.push({
+					episodeNumber,
+					changes: findChanges(existingEpisode, newEpisode),
+				});
+			} else {
+				logMessage(`Episode ${episodeNumber} unchanged.`);
+			}
+		} catch (error) {
+			logMessage(`Error checking episode ${episodeNumber}: ${error.message}`);
+		}
+	}
+
+	return updatedEpisodes;
+}
+
+function findChanges(oldEpisode, newEpisode) {
+	const changes = [];
+	const keys = Object.keys(newEpisode);
+
+	for (const key of keys) {
+		const oldVal = JSON.stringify(oldEpisode[key]);
+		const newVal = JSON.stringify(newEpisode[key]);
+		if (oldVal !== newVal) {
+			changes.push(`${key}: ${oldVal} -> ${newVal}`);
+		}
+	}
+
+	return changes.join('; ');
+}
+
 const getNextEpisode = async (env) => {
 	// Get most recent successful episode date
 	const LAST_SUCCESSFUL_EPISODE_DATE = await env.CDOWN_KV.get('LAST_SUCCESSFUL_EPISODE_DATE');
@@ -151,9 +222,18 @@ const getNextEpisode = async (env) => {
 	const { episode, data, nodatayet } = await internalGetEpisode({ episodeNumber });
 
 	if (nodatayet) {
+		// Even if no new episode, check previous episodes for updates
+		logMessage(`No new episode found (${episodeNumber}), but checking previous episodes for updates...`);
+		const updatedEpisodes = await checkAndUpdatePreviousEpisodes(env, episodeNumber - 1);
+
+		if (updatedEpisodes.length > 0) {
+			logMessage(`Found ${updatedEpisodes.length} updated episode(s) in previous episodes.`);
+			return { updatedEpisodes, noNewEpisode: true };
+		}
 		return false;
 	}
 
+	// New episode found - process it
 	const players = await doPlayers(env, episode);
 	const series = await doSeries(env, episode);
 
@@ -163,7 +243,17 @@ const getNextEpisode = async (env) => {
 	await env.CDOWN_KV.put('LAST_SUCCESSFUL_EPISODE_NUMBER', episodeNumber);
 	await env.CDOWN_BUCKET.put(PLAYERS_FILE, JSON.stringify(players));
 	await env.CDOWN_BUCKET.put(SERIES_FILE, JSON.stringify(series));
-	return data;
+
+	// Also check previous episodes for updates
+	logMessage(`New episode ${episodeNumber} processed. Now checking previous episodes for updates...`);
+	const updatedEpisodes = await checkAndUpdatePreviousEpisodes(env, episodeNumber - 1);
+
+	if (updatedEpisodes.length > 0) {
+		logMessage(`Found ${updatedEpisodes.length} updated episode(s) in previous episodes.`);
+		return { data, updatedEpisodes };
+	}
+
+	return { data };
 };
 
 export default {
@@ -180,24 +270,44 @@ export default {
 	// [[triggers]] configuration.
 
 	async scheduled(event, env, ctx) {
-		let data;
+		let result;
 		try {
-			data = await getNextEpisode(env);
-			if (!data) return;
+			result = await getNextEpisode(env);
+			if (!result) return;
 		} catch (e) {
 			await sendEmail(env, 'Countdown errors', e, e);
 			return;
-			// return new Response(JSON.stringify({ error: true }), {
-			// 	headers: {
-			// 		'content-type': 'application/json;charset=UTF-8',
-			// 	},
-			// });
 		}
+
+		// Prepare email subject based on what happened
+		let subject = 'Countdown log';
+		if (result.noNewEpisode && result.updatedEpisodes?.length > 0) {
+			subject = `Countdown: ${result.updatedEpisodes.length} episode(s) updated`;
+		} else if (result.updatedEpisodes?.length > 0) {
+			subject = `Countdown: New episode + ${result.updatedEpisodes.length} update(s)`;
+		} else if (!result.noNewEpisode) {
+			subject = 'Countdown: New episode';
+		}
+
 		logMessage('Seems to have worked!');
-		await sendEmail(env, 'Countdown log', getMessages(), getMessages());
+
+		// Add summary of updates to message
+		if (result.updatedEpisodes?.length > 0) {
+			logMessage('\n=== Updated Episodes ===');
+			for (const update of result.updatedEpisodes) {
+				logMessage(`Episode ${update.episodeNumber}: ${update.changes}`);
+			}
+		}
+
+		await sendEmail(env, subject, getMessages(), getMessages());
 	},
 
 	async fetch(request, env) {
+		// await env.CDOWN_KV.put('LAST_SUCCESSFUL_EPISODE_NUMBER', '8157');
+		// return;
+		let result = await getNextEpisode(env);
+		console.log(getMessages());
+		return;
 		// await env.CDOWN_KV.put('LAST_SUCCESSFUL_EPISODE_NUMBER', '8157');
 		// return;
 		initLog();
@@ -266,8 +376,12 @@ export default {
 			await env.CDOWN_BUCKET.put(PLAYERS_FILE, JSON.stringify(players));
 			await env.CDOWN_BUCKET.put(SERIES_FILE, JSON.stringify(series));
 
+			// Also check previous episodes for updates
+			logMessage(`Episode ${ep} processed. Now checking previous episodes for updates...`);
+			const updatedEpisodes = await checkAndUpdatePreviousEpisodes(env, ep - 1);
+
 			const messages = getMessages();
-			return new Response(JSON.stringify({ messages, episode, data }), {
+			return new Response(JSON.stringify({ messages, episode, data, updatedEpisodes }), {
 				headers: {
 					'content-type': 'application/json;charset=UTF-8',
 				},
