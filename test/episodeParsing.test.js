@@ -38,18 +38,25 @@ const createEpisodeData = ({
 	customIntro,
 }) => {
 	const [winScore, loseScore] = scores;
-	const intro =
-		customIntro ??
-		`'''Episode ${episodeNumber}''' was broadcast on ${date}, as part of [[${series}]].`;
+	const intro = customIntro ?? `'''Episode ${episodeNumber}''' was broadcast on ${date}, as part of [[${series}]].`;
 	return `{{episode|previous=Episode ${episodeNumber - 1}|next=Episode ${episodeNumber + 1}}}
 ${intro}
 
-[[${player1}]] played [[${player2}]], with ${winner} winning {{score|${winScore}|${loseScore}}}. The [[Dictionary Corner]] guest was [[${guests[0]}]], and the [[lexicographer]] was [[${lex}]].
+[[${player1}]] played [[${player2}]], with ${winner} winning {{score|${winScore}|${loseScore}}}. The [[Dictionary Corner]] guest was [[${
+		guests[0]
+	}]], and the [[lexicographer]] was [[${lex}]].
 
+${
+	rounds
+		? `
 ==Rounds==
 {{Rounds-start|${player1}|${player2}}}
 ${rounds}
 {{Rounds-end}}
+`
+		: ''
+}
+
 
 [[Category:Episodes in ${series}]]
 [[Category:Episodes presented by ${presenter}]]
@@ -78,7 +85,10 @@ const letters = [
 
 const numbers = [
 	numbersRound(15, ['25', '50', '75', '100', '6', '1'], 900, 'nwd', '905', 'timedout', '890', 'other=899', 'solother=(100×9)-?', ['extra']),
-	numbersRound(16, ['3', '6', '9', '25', '50', '75'], 466, '510', '450', '300/299', 'sol2=(300 + 166)', 'a=300', 'sola=25×12', ['rr=466', 'solrr=25×(9+9)']),
+	numbersRound(16, ['3', '6', '9', '25', '50', '75'], 466, '510', '450', '300/299', 'sol2=(300 + 166)', 'a=300', 'sola=25×12', [
+		'rr=466',
+		'solrr=25×(9+9)',
+	]),
 	numbersRound(17, ['2', '4', '6', '8', '3', '9'], 123, '&mdash;', '', '200/199 x', '', '', '', []),
 ];
 
@@ -114,17 +124,9 @@ const complexRounds = [
 	...conundrums,
 ].join('\n');
 
-const baseRounds = [
-	letters[0],
-	letters[1],
-	letters[2],
-	numbers[0],
-	letters[3],
-	letters[4],
-	numbers[1],
-	letters[5],
-	conundrums[0],
-].join('\n');
+const baseRounds = [letters[0], letters[1], letters[2], numbers[0], letters[3], letters[4], numbers[1], letters[5], conundrums[0]].join(
+	'\n'
+);
 
 describe('parseEpisode synthetic coverage', () => {
 	beforeEach(() => {
@@ -263,4 +265,14 @@ describe('parseEpisode synthetic coverage', () => {
 		});
 	});
 
+	test('malformed inputs', () => {
+		const episodeData = createEpisodeData({
+			episodeNumber: 9001,
+			series: 'Series 88',
+			rounds: false,
+			date: '25 March 2024',
+		});
+		const episode = parseEpisode(episodeData, 9001);
+		expect(episode).toBeFalsy();
+	});
 });
