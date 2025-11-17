@@ -4,9 +4,9 @@ import { initLog, getMessages, logMessage } from './log';
 
 const SERIES_FILE = 'series.json';
 const PLAYERS_FILE = 'players.json';
-const MIN_EPISODE_NUMBER = 3600;
-const MAX_EPISODE_NUMBER = 3640;
-const AUDIT_BATCH_SIZE = 10; // Process 10 episodes per cron run
+const MIN_EPISODE_NUMBER = 3600; // adjust to 1 for full run
+const MAX_EPISODE_NUMBER = 3640; // adjust to 8640 for full run
+const AUDIT_BATCH_SIZE = 10; // Process episodes per cron run
 const AUDIT_DELAY_MS = 500; // 500ms delay between episode fetches
 const AUDIT_REPORT_INTERVAL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
@@ -246,6 +246,7 @@ async function getAuditStats(env) {
 			unchanged: 0,
 			missing: 0,
 			failed: 0,
+			retryQueued: 0,
 			missingRanges: [],
 			failedEpisodes: [],
 			updatedEpisodes: [],
@@ -279,51 +280,180 @@ function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function auditHistoricEpisodes(env) {
-	const currentEpisodeStr = await env.CDOWN_KV.get('AUDIT_CURRENT_EPISODE');
-	const currentEpisode = currentEpisodeStr ? parseInt(currentEpisodeStr) : MIN_EPISODE_NUMBER;
-	const isDryRun = true; //(await env.CDOWN_KV.get('AUDIT_DRY_RUN')) === 'true';
+async function getRetryQueue(env) {
+	const q = await env.CDOWN_KV.get('AUDIT_RETRY_QUEUE');
+	return q ? JSON.parse(q) : [];
+}
 
-	if (currentEpisode > MAX_EPISODE_NUMBER) {
-		// Audit complete
-		logMessage('Audit complete! Generating final report...');
-		await generateFinalAuditReport(env);
+async function saveRetryQueue(env, list) {
+	await env.CDOWN_KV.put('AUDIT_RETRY_QUEUE', JSON.stringify(list));
+}
+
+function addUniqueRetry(queue, episodeNumber) {
+	if (!queue.includes(episodeNumber)) queue.push(episodeNumber);
+	return queue;
+}
+
+async function auditHistoricEpisodes(env) {
+	const isComplete = (await env.CDOWN_KV.get('AUDIT_COMPLETE')) === 'true';
+	if (isComplete) {
+		logMessage('Audit marked complete. Skipping.');
 		return { complete: true };
 	}
+
+	let phase = (await env.CDOWN_KV.get('AUDIT_PHASE')) || 'scan';
+	const currentEpisodeStr = await env.CDOWN_KV.get('AUDIT_CURRENT_EPISODE');
+	let currentEpisode = currentEpisodeStr ? parseInt(currentEpisodeStr) : MIN_EPISODE_NUMBER;
+	const isDryRun = true; //(await env.CDOWN_KV.get('AUDIT_DRY_RUN')) === 'true';
 
 	const stats = await getAuditStats(env);
 	const startTime = Date.now();
 	const startEpisode = currentEpisode;
 	let episodesProcessed = 0;
 
-	logMessage(`${isDryRun ? '[DRY RUN] ' : ''}Audit batch starting from episode ${currentEpisode}`);
+	if (phase === 'scan' && currentEpisode > MAX_EPISODE_NUMBER) {
+		phase = 'retry';
+		await env.CDOWN_KV.put('AUDIT_PHASE', 'retry');
+		logMessage('Initial scan complete. Switching to retry phase.');
+	}
 
-	for (let i = 0; i < AUDIT_BATCH_SIZE && currentEpisode + i <= MAX_EPISODE_NUMBER; i++) {
-		const episodeNumber = currentEpisode + i;
+	logMessage(
+		`${isDryRun ? '[DRY RUN] ' : ''}Audit batch (${phase}) starting from ${phase === 'scan' ? 'episode ' + currentEpisode : 'retry queue'}`
+	);
 
-		try {
-			// Fetch latest version from wiki
-			const {
-				episode: newEpisode,
-				data: newData,
-				nodatayet,
-			} = await internalGetEpisode({
-				episodeNumber,
-				isUpdate: true,
-			});
+	if (phase === 'scan') {
+		for (let i = 0; i < AUDIT_BATCH_SIZE && currentEpisode + i <= MAX_EPISODE_NUMBER; i++) {
+			const episodeNumber = currentEpisode + i;
 
-			if (nodatayet) {
-				// Episode doesn't exist on wiki (missing or pulled)
-				stats.missing++;
-				addToMissingRanges(stats.missingRanges, episodeNumber);
-				logMessage(`Episode ${episodeNumber}: missing/pulled`);
-			} else {
-				// Get existing version from R2
+			try {
+				// Fetch latest version from wiki
+				const res = await internalGetEpisode({ episodeNumber, isUpdate: true });
+
+				if (res.status === 'no-data') {
+					// Episode exists with no data (early series etc.)
+					stats.missing++;
+					addToMissingRanges(stats.missingRanges, episodeNumber);
+					logMessage(`Episode ${episodeNumber}: no-data page`);
+				} else if (res.status === 'timeout') {
+					// Temporary issue, queue for retry later
+					const q = await getRetryQueue(env);
+					addUniqueRetry(q, episodeNumber);
+					await saveRetryQueue(env, q);
+					stats.retryQueued++;
+					logMessage(`Episode ${episodeNumber}: queued for retry (timeout/unavailable)`);
+				} else {
+					const { episode: newEpisode, data: newData } = res;
+					// Get existing version from R2
+					const existingEpisodeData = await env.CDOWN_BUCKET.get(`${episodeNumber}.json`);
+
+					if (!existingEpisodeData) {
+						// New episode not previously stored
+						logMessage(`Episode ${episodeNumber}: new (not previously stored)`);
+						if (!isDryRun) {
+							await env.CDOWN_KV.put(episodeNumber, newData);
+							await env.CDOWN_BUCKET.put(`${episodeNumber}.json`, JSON.stringify(newEpisode));
+							await doPlayers(env, newEpisode);
+							await doSeries(env, newEpisode);
+						}
+						stats.updated++;
+						stats.updatedEpisodes.push({
+							episodeNumber,
+							changes: 'newly added',
+						});
+					} else {
+						const existingEpisode = await existingEpisodeData.json();
+						const existingStr = JSON.stringify(existingEpisode);
+						const newStr = JSON.stringify(newEpisode);
+
+						if (existingStr !== newStr) {
+							// Episode has been updated
+							const changes = findChanges(existingEpisode, newEpisode);
+							logMessage(`Episode ${episodeNumber}: UPDATED - ${changes}`);
+							stats.updated++;
+							if (!isDryRun) {
+								await env.CDOWN_KV.put(episodeNumber, newData);
+								await env.CDOWN_BUCKET.put(`${episodeNumber}.json`, JSON.stringify(newEpisode));
+								await doPlayers(env, newEpisode);
+								await doSeries(env, newEpisode);
+							}
+
+							stats.updated++;
+							stats.updatedEpisodes.push({
+								episodeNumber,
+								changes,
+							});
+						} else {
+							// No changes
+							stats.unchanged++;
+						}
+					}
+				}
+
+				episodesProcessed++;
+
+				// Throttle to avoid overwhelming the wiki server
+				if (i < AUDIT_BATCH_SIZE - 1 && currentEpisode + i < MAX_EPISODE_NUMBER) {
+					await sleep(AUDIT_DELAY_MS);
+				}
+			} catch (error) {
+				logMessage(`Episode ${episodeNumber}: ERROR - ${error.message}`);
+				if (typeof error?.message === 'string' && error.message.includes('Cannot convert undefined or null to object')) {
+					const q = await getRetryQueue(env);
+					addUniqueRetry(q, episodeNumber);
+					await saveRetryQueue(env, q);
+					stats.retryQueued++;
+					logMessage(`Episode ${episodeNumber}: queued for retry due to transient parsing error`);
+				} else {
+					stats.failed++;
+					stats.failedEpisodes.push({ episodeNumber, error: error.message });
+				}
+			}
+		}
+	}
+	// Update progress after scan batch
+	const newCurrentEpisode = phase === 'scan' ? currentEpisode + episodesProcessed : currentEpisode;
+	if (phase === 'scan') await env.CDOWN_KV.put('AUDIT_CURRENT_EPISODE', newCurrentEpisode.toString());
+	await saveAuditStats(env, stats);
+
+	// If we just crossed the end of scan range, move to retry phase
+	if (phase === 'scan' && newCurrentEpisode > MAX_EPISODE_NUMBER) {
+		phase = 'retry';
+		await env.CDOWN_KV.put('AUDIT_PHASE', 'retry');
+	}
+
+	// Retry phase
+	if (phase === 'retry') {
+		let queue = await getRetryQueue(env);
+		if (queue.length === 0) {
+			// Nothing left to retry: finalize and stop forever
+			await generateFinalAuditReport(env);
+			await env.CDOWN_KV.put('AUDIT_COMPLETE', 'true');
+			logMessage('Audit fully complete. Marked complete to stop future runs.');
+			return { complete: true };
+		}
+
+		// Process up to batch size from queue
+		const slice = queue.slice(0, AUDIT_BATCH_SIZE);
+		const remaining = queue.slice(AUDIT_BATCH_SIZE);
+		for (const episodeNumber of slice) {
+			try {
+				const res = await internalGetEpisode({ episodeNumber, isUpdate: true });
+				if (res.status === 'timeout') {
+					// keep in queue for next time
+					remaining.push(episodeNumber);
+					logMessage(`Retry ${episodeNumber}: still unavailable, re-queue`);
+					continue;
+				}
+				if (res.status === 'no-data') {
+					// accept as missing, do not requeue
+					stats.missing++;
+					addToMissingRanges(stats.missingRanges, episodeNumber);
+					logMessage(`Retry ${episodeNumber}: no-data page, marking missing`);
+					continue;
+				}
+				const { episode: newEpisode, data: newData } = res;
 				const existingEpisodeData = await env.CDOWN_BUCKET.get(`${episodeNumber}.json`);
-
 				if (!existingEpisodeData) {
-					// New episode not previously stored
-					logMessage(`Episode ${episodeNumber}: new (not previously stored)`);
 					if (!isDryRun) {
 						await env.CDOWN_KV.put(episodeNumber, newData);
 						await env.CDOWN_BUCKET.put(`${episodeNumber}.json`, JSON.stringify(newEpisode));
@@ -331,67 +461,50 @@ async function auditHistoricEpisodes(env) {
 						await doSeries(env, newEpisode);
 					}
 					stats.updated++;
-					stats.updatedEpisodes.push({
-						episodeNumber,
-						changes: 'newly added',
-					});
+					stats.updatedEpisodes.push({ episodeNumber, changes: 'newly added (retry)' });
 				} else {
 					const existingEpisode = await existingEpisodeData.json();
-					const existingStr = JSON.stringify(existingEpisode);
-					const newStr = JSON.stringify(newEpisode);
-
-					if (existingStr !== newStr) {
-						// Episode has been updated
+					if (JSON.stringify(existingEpisode) !== JSON.stringify(newEpisode)) {
 						const changes = findChanges(existingEpisode, newEpisode);
-						logMessage(`Episode ${episodeNumber}: UPDATED - ${changes}`);
-
 						if (!isDryRun) {
 							await env.CDOWN_KV.put(episodeNumber, newData);
 							await env.CDOWN_BUCKET.put(`${episodeNumber}.json`, JSON.stringify(newEpisode));
 							await doPlayers(env, newEpisode);
 							await doSeries(env, newEpisode);
 						}
-
 						stats.updated++;
-						stats.updatedEpisodes.push({
-							episodeNumber,
-							changes,
-						});
+						stats.updatedEpisodes.push({ episodeNumber, changes });
 					} else {
-						// No changes
 						stats.unchanged++;
 					}
 				}
+			} catch (error) {
+				if (typeof error?.message === 'string' && error.message.includes('Cannot convert undefined or null to object')) {
+					remaining.push(episodeNumber);
+					logMessage(`Retry ${episodeNumber}: transient parse error, re-queue`);
+				} else {
+					stats.failed++;
+					stats.failedEpisodes.push({ episodeNumber, error: error.message });
+				}
 			}
-
-			episodesProcessed++;
-
-			// Throttle to avoid overwhelming the wiki server
-			if (i < AUDIT_BATCH_SIZE - 1 && currentEpisode + i < MAX_EPISODE_NUMBER) {
-				await sleep(AUDIT_DELAY_MS);
-			}
-		} catch (error) {
-			logMessage(`Episode ${episodeNumber}: ERROR - ${error.message}`);
-			stats.failed++;
-			stats.failedEpisodes.push({
-				episodeNumber,
-				error: error.message,
-			});
 		}
+		await saveRetryQueue(env, remaining);
 	}
 
-	// Update progress
-	const newCurrentEpisode = currentEpisode + episodesProcessed;
-	await env.CDOWN_KV.put('AUDIT_CURRENT_EPISODE', newCurrentEpisode.toString());
-	await saveAuditStats(env, stats);
-
 	const elapsed = Date.now() - startTime;
-	logMessage(`Batch complete: processed episodes ${startEpisode}-${newCurrentEpisode - 1} in ${elapsed}ms`);
-	logMessage(`Stats: ${stats.updated} updated, ${stats.unchanged} unchanged, ${stats.missing} missing, ${stats.failed} failed`);
+	logMessage(`Batch complete (${phase}). Elapsed ${elapsed}ms`);
+	logMessage(
+		`Stats: ${stats.updated} updated, ${stats.unchanged} unchanged, ${stats.missing} missing, ${stats.failed} failed, ${
+			stats.retryQueued || 0
+		} queued for retry`
+	);
 
-	// Check if we should send an interim report
-	await checkAndSendInterimReport(env, stats, newCurrentEpisode);
+	// Interim report considers phase and position
+	const reportPosition =
+		phase === 'scan' ? (newCurrentEpisode <= MAX_EPISODE_NUMBER ? newCurrentEpisode : MAX_EPISODE_NUMBER) : MAX_EPISODE_NUMBER;
+	await checkAndSendInterimReport(env, stats, reportPosition);
 
+	return { phase, episodesProcessed, stats, isDryRun };
 	return {
 		startEpisode,
 		endEpisode: newCurrentEpisode - 1,
