@@ -394,7 +394,6 @@ const validateNumberDeclaration = (declares, solution, round, failed, episodeNum
 };
 
 const processNumbersRound = (round, episodeNumber) => {
-	console.log(round);
 	let [, , n1, n2, n3, n4, n5, n6, target, p1Declares, p1Solution, p2Declares, p2Solution, best, bestSol] = round
 		.split('|')
 		.map((x) => x.trim());

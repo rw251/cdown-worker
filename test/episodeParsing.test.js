@@ -54,7 +54,7 @@ test('Parses episode', () => {
 [[Category:Wins by over 100]]`;
 	const x = parseEpisode(data, 8021);
 	const y = getMessages();
-	console.log(y);
+	// console.log(y);
 	expect(y.length).toBe(0);
 });
 
@@ -112,7 +112,7 @@ NOTE: The [[conundrum]] had two valid solutions – {{word|CERTAINLY}} and {{wor
 [[Category:Episodes affected by administrative errors]]`;
 	const x = parseEpisode(data, 8110);
 	const y = getMessages();
-	console.log(y);
+	// console.log(y);
 	expect(y.length).toBe(0);
 });
 
@@ -168,7 +168,7 @@ test('Parses episode', () => {
 	const x = parseEpisode(data, 8156);
 	expect(x.r[5]['1-sol']).toBe(false);
 	const y = getMessages();
-	console.log(y);
+	// console.log(y);
 	expect(y.length).toBe(0);
 });
 
@@ -222,6 +222,6 @@ test('Parses episode', () => {
 `;
 	const x = parseEpisode(data, 8161);
 	const y = getMessages();
-	console.log(y);
+	// console.log(y);
 	expect(y.length).toBe(0);
 });
