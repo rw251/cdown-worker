@@ -1,4 +1,9 @@
+import { unlinkSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { logMessage } from './log';
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 const dirFromNumber = (episodeNumber) =>
 	join(

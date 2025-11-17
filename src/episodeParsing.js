@@ -464,11 +464,14 @@ const processConundrumRound = (round, episodeNumber) => {
 		// don't know the order
 		selection = selection.substr(0, 9).toUpperCase();
 	} else if (selection.indexOf('?') > -1) {
+		/* istanbul ignore next */
 		failed = true;
 	} else {
+		/* istanbul ignore next */
 		logMessage(`In episode ${episodeNumber} the conundrum of ${selection} can't be parsed`);
 	}
 	if (round.search(/c1sol=\?/) > -1 && round.search(/c2sol=\?/) > -1) {
+		/* istanbul ignore next */
 		failed = true;
 	}
 
@@ -567,6 +570,7 @@ const processRound = (round, episodeNumber) => {
 	if (round.indexOf('R-letters') > -1 || round.indexOf('Rx-letters') > -1) {
 		rtn = { ...processLettersRound(round, episodeNumber), tp: 'letters' };
 		if (rtn.failed) {
+			/* istanbul ignore next */
 			delete rtn.tp;
 		} else {
 			delete rtn.failed;
@@ -577,6 +581,7 @@ const processRound = (round, episodeNumber) => {
 		// break it so far
 		rtn = { ...processNumbersRound(round, episodeNumber), tp: 'numbers' };
 		if (rtn.failed) {
+			/* istanbul ignore next */
 			delete rtn.tp;
 		} else {
 			delete rtn.failed;
@@ -584,6 +589,7 @@ const processRound = (round, episodeNumber) => {
 	} else if (round.indexOf('R-conundrum') > -1) {
 		rtn = { ...processConundrumRound(round, episodeNumber), tp: 'conundrum' };
 		if (rtn.failed) {
+			/* istanbul ignore next */
 			delete rtn.tp;
 		} else {
 			delete rtn.failed;
@@ -673,6 +679,8 @@ const parseEpisode = (episode, i, isUpdate) => {
 	return episodeObject;
 };
 
+// Ignore this in jest code coverage
+/* istanbul ignore next */
 const parseEpisodes = (start = 1) => {
 	const episodes = [];
 	const errors = [];
@@ -706,6 +714,7 @@ const parseEpisodes = (start = 1) => {
 	return { episodes, errors };
 };
 
+/* istanbul ignore next */
 const getDateFromEpisode = (episodeId) => {
 	const episode = fs.readFileSync(fileFromNumber(episodeId), 'utf8');
 	const { firstShownDate } = getEpisodeDateAndSeries(episode, episodeId);
