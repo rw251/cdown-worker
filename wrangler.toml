@@ -1,11 +1,14 @@
 name = "cdown-get-latest"
 main = "src/index.js"
-compatibility_date = "2023-10-16"
+compatibility_date = "2025-11-16"
 
 account_id = "98f57fdd7c87697f0d946a56cb6c4299"
 
 # Disable the .dev html route as not needed for cron jobs
 workers_dev = false
+
+# Allow node modules
+compatibility_flags = [ "nodejs_compat" ]
 
 r2_buckets  = [
   { binding = "CDOWN_BUCKET", bucket_name = "cdown-raw-files"}
