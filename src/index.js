@@ -42,21 +42,31 @@ async function writeLog(env) {
 
 async function internalGetEpisode({ episodeNumber, isUpdate = false }) {
 	const apterousUrl = 'http://wiki.apterous.org/index.php';
-	const html = await fetch(`${apterousUrl}?title=Episode_${episodeNumber}&action=edit`).then((resp) => resp.text());
+	// Fetch with timeout and explicit classification
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), 10000);
+	let html;
+	try {
+		const resp = await fetch(`${apterousUrl}?title=Episode_${episodeNumber}&action=edit`, { signal: controller.signal });
+		clearTimeout(timeout);
+		html = await resp.text();
+	} catch (err) {
+		clearTimeout(timeout);
+		logMessage(`Fetch error for episode ${episodeNumber}: ${err.message}`);
+		return { status: 'timeout' };
+	}
 
 	logMessage(`Retrieved episode ${episodeNumber} now trying to process.`);
 
 	const textarea = html.match(/wpTextbox1[^>]+>([\s\S]+)<\/textarea>/);
-	//bfalse; // $('#wpTextbox1').val();
 	if (!textarea || !textarea.length || textarea.length < 2) {
-		// Nothing on that page - do something
-		// Write log and exit
-		return { nodatayet: true };
+		// Unexpected page content; treat as temporary/unavailable
+		return { status: 'timeout' };
 	}
 	const data = textarea[1];
 	const episode = parseEpisode(data, episodeNumber, isUpdate);
-	if (!episode) return { nodatayet: true };
-	return { episode, data };
+	if (!episode) return { status: 'no-data' };
+	return { status: 'ok', episode, data };
 }
 
 async function doPlayers(env, episode) {
@@ -137,12 +147,16 @@ async function checkAndUpdatePreviousEpisodes(env, latestEpisodeNumber) {
 	for (const episodeNumber of episodesToCheck) {
 		try {
 			// Fetch the latest version from wiki
-			const { episode: newEpisode, data: newData, nodatayet } = await internalGetEpisode({ episodeNumber, isUpdate: true });
-
-			if (nodatayet) {
-				logMessage(`Episode ${episodeNumber} not available for recheck (possibly pulled).`);
+			const res = await internalGetEpisode({ episodeNumber, isUpdate: true });
+			if (res.status !== 'ok') {
+				if (res.status === 'no-data') {
+					logMessage(`Episode ${episodeNumber} recheck: page has no episode data.`);
+				} else if (res.status === 'timeout') {
+					logMessage(`Episode ${episodeNumber} recheck: temporary fetch issue (timeout/unavailable).`);
+				}
 				continue;
 			}
+			const { episode: newEpisode, data: newData } = res;
 
 			// Get the existing stored version from R2
 			const existingEpisodeData = await env.CDOWN_BUCKET.get(`${episodeNumber}.json`);
@@ -189,6 +203,29 @@ function findChanges(oldEpisode, newEpisode) {
 	const keys = Object.keys(newEpisode);
 
 	for (const key of keys) {
+		if (key === 'r') {
+			const oldRounds = Array.isArray(oldEpisode.r) ? oldEpisode.r : [];
+			const newRounds = Array.isArray(newEpisode.r) ? newEpisode.r : [];
+			const maxLen = Math.max(oldRounds.length, newRounds.length);
+			for (let i = 0; i < maxLen; i++) {
+				const oldR = oldRounds[i];
+				const newR = newRounds[i];
+				const idx = i + 1; // 1-based round index
+				if (oldR === undefined && newR !== undefined) {
+					changes.push(`r[${idx}]: <missing> -> ${JSON.stringify(newR)}`);
+					continue;
+				}
+				if (oldR !== undefined && newR === undefined) {
+					changes.push(`r[${idx}]: ${JSON.stringify(oldR)} -> <removed>`);
+					continue;
+				}
+				if (JSON.stringify(oldR) !== JSON.stringify(newR)) {
+					changes.push(`r[${idx}]: ${JSON.stringify(oldR)} -> ${JSON.stringify(newR)}`);
+				}
+			}
+			continue;
+		}
+
 		const oldVal = JSON.stringify(oldEpisode[key]);
 		const newVal = JSON.stringify(newEpisode[key]);
 		if (oldVal !== newVal) {
@@ -494,9 +531,9 @@ const getNextEpisode = async (env) => {
 	const episodeNumber = +LAST_SUCCESSFUL_EPISODE_NUMBER + 1;
 	console.log(episodeNumber);
 
-	const { episode, data, nodatayet } = await internalGetEpisode({ episodeNumber });
+	const res = await internalGetEpisode({ episodeNumber });
 
-	if (nodatayet) {
+	if (res.status !== 'ok') {
 		// Even if no new episode, check previous episodes for updates
 		logMessage(`No new episode found (${episodeNumber}), but checking previous episodes for updates...`);
 		const updatedEpisodes = await checkAndUpdatePreviousEpisodes(env, episodeNumber - 1);
@@ -509,6 +546,7 @@ const getNextEpisode = async (env) => {
 	}
 
 	// New episode found - process it
+	const { episode, data } = res;
 	const players = await doPlayers(env, episode);
 	const series = await doSeries(env, episode);
 
@@ -657,16 +695,18 @@ export default {
 			});
 		} else if (request.url.indexOf('get') > -1) {
 			const ep = +request.url.split('/get')[1].replace(/[^0-9]/g, '');
-			const { episode, data, nodatayet } = await internalGetEpisode({ episodeNumber: ep });
+			const res = await internalGetEpisode({ episodeNumber: ep });
 
-			if (nodatayet) {
-				return new Response(JSON.stringify({ message: 'Episode not retrieved. Likely pulled from broadcast.' }), {
+			if (res.status !== 'ok') {
+				const msg = res.status === 'timeout' ? 'Episode fetch timed out/unavailable.' : 'Episode page has no data.';
+				return new Response(JSON.stringify({ message: msg }), {
 					headers: {
 						'content-type': 'application/json;charset=UTF-8',
 					},
 				});
 			}
 
+			const { episode, data } = res;
 			const players = await doPlayers(env, episode);
 			const series = await doSeries(env, episode);
 

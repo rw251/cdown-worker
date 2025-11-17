@@ -1,7 +1,7 @@
-import { unlinkSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { logMessage } from './log';
+import { join } from 'node:path';
+import { unlinkSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 

@@ -1,4 +1,3 @@
-import { fileFromNumber } from './fileUtils';
 import { logMessage } from './log';
 
 let lastFirstShownDate = new Date('1980-01-01');
@@ -681,7 +680,11 @@ const parseEpisode = (episode, i, isUpdate) => {
 
 // Ignore this in jest code coverage
 /* istanbul ignore next */
-const parseEpisodes = (start = 1) => {
+const parseEpisodes = async (start = 1) => {
+	// Dynamic import for Node.js-only utilities
+	const { fileFromNumber } = await import('./fileUtils.js');
+	const fs = await import('node:fs');
+
 	const episodes = [];
 	const errors = [];
 	for (let i = start; i <= 1000000; i += 1) {
@@ -715,7 +718,11 @@ const parseEpisodes = (start = 1) => {
 };
 
 /* istanbul ignore next */
-const getDateFromEpisode = (episodeId) => {
+const getDateFromEpisode = async (episodeId) => {
+	// Dynamic import for Node.js-only utilities
+	const { fileFromNumber } = await import('./fileUtils.js');
+	const fs = await import('node:fs');
+
 	const episode = fs.readFileSync(fileFromNumber(episodeId), 'utf8');
 	const { firstShownDate } = getEpisodeDateAndSeries(episode, episodeId);
 	return firstShownDate;
