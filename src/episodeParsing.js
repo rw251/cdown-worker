@@ -61,8 +61,14 @@ const getEpisodeDateAndSeries = (data, epNumberShouldBe, isUpdate) => {
 	if (series === 'Bill Tidy') series = 'Series 11'; // special episode (495)
 
 	if (episodeNumber !== epNumberShouldBe) {
-		logMessage(`In episode ${epNumberShouldBe} the parsed episode number is actually ${episodeNumber}`);
-		return {};
+		if (episodeNumber === epNumberShouldBe - 1) {
+			logMessage(`In episode ${epNumberShouldBe} the parsed episode number is ${episodeNumber} (yesterday's) - using expected number`);
+			// Wiki page likely copy/pasted from yesterday and not updated yet - use the expected episode number
+			episodeNumber = epNumberShouldBe;
+		} else {
+			logMessage(`In episode ${epNumberShouldBe} the parsed episode number is actually ${episodeNumber} - mismatch too large`);
+			return {};
+		}
 	}
 	if (episodeNumber > 1 && firstShownDate < lastFirstShownDate && !isUpdate) {
 		logMessage(`Episode ${episodeNumber} is shown before the previous episode`);
