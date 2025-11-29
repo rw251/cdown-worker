@@ -152,8 +152,14 @@ async function doSeries(env, episode) {
 async function checkAndUpdatePreviousEpisodes(env, latestEpisodeNumber) {
 	const updatedEpisodes = [];
 
-	// Check previous 4 episodes
-	const episodesToCheck = [latestEpisodeNumber - 1, latestEpisodeNumber - 2, latestEpisodeNumber - 3, latestEpisodeNumber - 4];
+	// Check this episode and the previous 4 (5 total)
+	const episodesToCheck = [
+		latestEpisodeNumber,
+		latestEpisodeNumber - 1,
+		latestEpisodeNumber - 2,
+		latestEpisodeNumber - 3,
+		latestEpisodeNumber - 4,
+	];
 
 	for (const episodeNumber of episodesToCheck) {
 		try {
@@ -711,6 +717,22 @@ const getNextEpisode = async (env) => {
 
 	// New episode found - process it
 	const { episode, data } = res;
+
+	// Check if this is just a copy/paste of yesterday's episode
+	const yesterdayEpisodeNumber = episodeNumber - 1;
+	const yesterdayEpisodeData = await env.CDOWN_BUCKET.get(`${yesterdayEpisodeNumber}.json`);
+	if (yesterdayEpisodeData) {
+		const yesterdayEpisode = await yesterdayEpisodeData.json();
+		// Compare rounds - if identical, it's likely a full copy/paste
+		const todayRounds = JSON.stringify(episode.r);
+		const yesterdayRounds = JSON.stringify(yesterdayEpisode.r);
+		if (todayRounds === yesterdayRounds) {
+			logMessage(
+				`Episode ${episodeNumber} has identical rounds to yesterday (${yesterdayEpisodeNumber}) - likely copy/paste, waiting for next scrape`
+			);
+			return false;
+		}
+	}
 	const players = await doPlayers(env, episode);
 	const series = await doSeries(env, episode);
 
@@ -775,7 +797,8 @@ export default {
 			result = await getNextEpisode(env);
 			if (!result) return;
 		} catch (e) {
-			await sendEmail(env, 'Countdown errors', e, e);
+			logMessage(`Error: ${e.message}\n${e.stack}`);
+			await sendEmail(env, 'Countdown errors', getMessages(), getMessages());
 			return;
 		}
 
