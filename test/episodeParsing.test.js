@@ -216,12 +216,23 @@ describe('parseEpisode synthetic coverage', () => {
 		expect(episode.s).toMatchObject({ t: 'zoomdown', l: '/ZoomDown_Series_', n: 0 });
 	});
 
-	test('throws when article number does not match', () => {
+	test('throws when article number does not match and is not expected-1', () => {
 		const data = createEpisodeData({
 			episodeNumber: 5000,
 			rounds: baseRounds,
 		});
-		expect(() => parseEpisode(data, 5001)).toThrow('Could not parse date or series');
+		// Mismatch of more than 1 should throw
+		expect(() => parseEpisode(data, 5002)).toThrow('Could not parse date or series');
+	});
+
+	test('accepts article number mismatch of exactly expected-1 (copy/paste scenario)', () => {
+		const data = createEpisodeData({
+			episodeNumber: 5000,
+			rounds: baseRounds,
+		});
+		// Mismatch of exactly 1 (yesterday's copy/paste) should succeed with corrected episode number
+		const episode = parseEpisode(data, 5001);
+		expect(episode.e).toBe(5001);
 	});
 
 	test('rejects older broadcasts unless flagged as update', () => {

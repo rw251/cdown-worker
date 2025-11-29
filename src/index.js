@@ -1,6 +1,6 @@
 import { sendEmail } from './email';
 import { parseEpisode } from './episodeParsing';
-import { initLog, getMessages, logMessage } from './log';
+import { initLog, getMessages, getMessagesText, getMessagesHtml, logMessage } from './log';
 
 const SERIES_FILE = 'series.json';
 const PLAYERS_FILE = 'players.json';
@@ -786,7 +786,7 @@ export default {
 				// Continue with audit - logs already captured
 			} catch (e) {
 				logMessage(`Audit error: ${e.message}\n${e.stack}`);
-				await sendEmail(env, 'Countdown Audit Error', getMessages(), getMessages());
+				await sendEmail(env, 'Countdown Audit Error', getMessagesText(), getMessagesHtml());
 			}
 			return;
 		}
@@ -798,7 +798,7 @@ export default {
 			if (!result) return;
 		} catch (e) {
 			logMessage(`Error: ${e.message}\n${e.stack}`);
-			await sendEmail(env, 'Countdown errors', getMessages(), getMessages());
+			await sendEmail(env, 'Countdown errors', getMessagesText(), getMessagesHtml());
 			return;
 		}
 
@@ -822,7 +822,7 @@ export default {
 			}
 		}
 
-		await sendEmail(env, subject, getMessages(), getMessages());
+		await sendEmail(env, subject, getMessagesText(), getMessagesHtml());
 	},
 
 	async fetch(request, env) {
