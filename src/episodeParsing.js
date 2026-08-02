@@ -497,7 +497,10 @@ const processConundrumRound = (round, episodeNumber) => {
 			p2Time = 1;
 		} else {
 			if (round.indexOf('c1sol') > -1) {
-				if (round.search(/c1sol=[a-z]+ [^|]*x/) > -1) {
+				if (round.search(/c1sol=(?:&mdash;|—|-|−|x|☓|X)(?:\||$)/) > -1) {
+					p1Sol = '';
+					p1Valid = false;
+				} else if (round.search(/c1sol=[a-z]+ [^|]*x/) > -1) {
 					p1Sol = round.match(/c1sol=([a-z]+) /)[1].toUpperCase();
 					p1Valid = false;
 				} else if (round.search(/c1sol=\?? ?\{?\{?[x☓X]\}?\}?\|/) > -1) {
@@ -519,7 +522,10 @@ const processConundrumRound = (round, episodeNumber) => {
 				p1Time = +p1Time;
 			}
 			if (round.indexOf('c2sol') > -1) {
-				if (round.search(/c2sol=[a-z]+ [^|]*x/) > -1) {
+				if (round.search(/c2sol=(?:&mdash;|—|-|−|x|☓|X)(?:\||$)/) > -1) {
+					p2Sol = '';
+					p2Valid = false;
+				} else if (round.search(/c2sol=[a-z]+ [^|]*x/) > -1) {
 					p2Sol = round.match(/c2sol=([a-z]+) /)[1].toUpperCase();
 					p2Valid = false;
 				} else if (round.search(/c2sol=[x☓X] [a-z]+/) > -1) {
