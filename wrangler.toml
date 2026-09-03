@@ -26,4 +26,4 @@ send_email = [
 [triggers]
 # Every hour every day at minute 1 - regular episode fetch
 # Every 15 minutes - audit historic episodes
-crons = ["1 * * * *", "*/5 * * * *"]
+crons = ["1 * * * *", "*/15 * * * *"]

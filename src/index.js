@@ -59,7 +59,12 @@ async function internalGetEpisode({ episodeNumber, isUpdate = false }) {
 	let html;
 	let resp;
 	try {
-		resp = await fetch(`${apterousUrl}?title=Episode_${episodeNumber}&action=edit`, { signal: controller.signal });
+		resp = await fetch(`${apterousUrl}?title=Episode_${episodeNumber}&action=edit`, {
+			signal: controller.signal,
+			headers: {
+				'User-Agent': 'Mozilla/5.0 (compatible; cdown-worker/1.0; Countdown episode data mirror)',
+			},
+		});
 		clearTimeout(timeout);
 		if (!resp.ok) {
 			logMessage(`Non-OK response for episode ${episodeNumber}: HTTP ${resp.status} ${resp.statusText}`);
@@ -778,7 +783,7 @@ export default {
 		initLog();
 
 		// Check if this is an audit cron run
-		const isAuditRun = event.cron === '*/5 * * * *'; // Every 5 minutes
+		const isAuditRun = event.cron === '*/15 * * * *'; // Every 15 minutes
 
 		if (isAuditRun) {
 			// Run audit
