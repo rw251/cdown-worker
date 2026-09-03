@@ -1,12 +1,16 @@
 import { sendEmail } from './email';
+import { episodeDateForState } from './episodeSchedule';
 import { parseEpisode } from './episodeParsing';
 import { initLog, getMessages, getMessagesText, getMessagesHtml, logMessage } from './log';
+import { fetchEpisodeWikitext } from './wiki';
+import { updateWikiHealth } from './wikiHealth';
 
 const SERIES_FILE = 'series.json';
 const PLAYERS_FILE = 'players.json';
 const AUDIT_BATCH_SIZE = 10; // Process episodes per cron run
-const AUDIT_DELAY_MS = 500; // 500ms delay between episode fetches
+const AUDIT_DELAY_MS = 2000; // Pace historic requests rather than sending a tight burst
 const AUDIT_REPORT_INTERVAL_MS = 8 * 60 * 60 * 1000; // 8 hours
+const AUDIT_CRON = '31 * * * *'; // Once an hour, away from the regular fetch
 
 // Get audit configuration from KV with defaults
 async function getAuditConfig(env) {
@@ -52,43 +56,18 @@ async function writeLog(env) {
 }
 
 async function internalGetEpisode({ episodeNumber, isUpdate = false }) {
-	const apterousUrl = 'http://wiki.apterous.org/index.php';
-	// Fetch with timeout and explicit classification
-	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), 10000);
-	let html;
-	let resp;
-	try {
-		resp = await fetch(`${apterousUrl}?title=Episode_${episodeNumber}&action=edit`, {
-			signal: controller.signal,
-			headers: {
-				'User-Agent': 'Mozilla/5.0 (compatible; cdown-worker/1.0; Countdown episode data mirror)',
-			},
-		});
-		clearTimeout(timeout);
-		if (!resp.ok) {
-			logMessage(`Non-OK response for episode ${episodeNumber}: HTTP ${resp.status} ${resp.statusText}`);
-		}
-		html = await resp.text();
-	} catch (err) {
-		clearTimeout(timeout);
-		logMessage(`Fetch error for episode ${episodeNumber}: ${err.message}`);
-		return { status: 'timeout' };
-	}
-
-	logMessage(`Retrieved episode ${episodeNumber} now trying to process.`);
-
-	const textarea = html.match(/wpTextbox1[^>]+>([\s\S]+)<\/textarea>/);
-	if (!textarea || !textarea.length || textarea.length < 2) {
-		// Unexpected page content; log status/body snippet to distinguish real timeout from a block/rate-limit response
+	const wikiResult = await fetchEpisodeWikitext(episodeNumber);
+	if (wikiResult.status !== 'ok') {
 		logMessage(
-			`Episode ${episodeNumber}: no textarea found. HTTP ${resp.status} ${resp.statusText}. Body snippet: ${html.slice(0, 300).replace(/\s+/g, ' ')}`,
+			`Wiki fetch for episode ${episodeNumber}: ${wikiResult.status}${wikiResult.httpStatus ? ` (HTTP ${wikiResult.httpStatus})` : ''} - ${wikiResult.reason}`,
 		);
-		return { status: 'timeout' };
+		return wikiResult;
 	}
-	const data = textarea[1];
+
+	const data = wikiResult.data;
+	logMessage(`Retrieved episode ${episodeNumber} from the MediaWiki API; parsing ${data.length} characters.`);
 	const episode = parseEpisode(data, episodeNumber, isUpdate);
-	if (!episode) return { status: 'no-data' };
+	if (!episode) return { status: 'no-data', reason: 'revision does not contain recognisable episode data' };
 	return { status: 'ok', episode, data };
 }
 
@@ -163,6 +142,7 @@ async function doSeries(env, episode) {
 
 async function checkAndUpdatePreviousEpisodes(env, latestEpisodeNumber) {
 	const updatedEpisodes = [];
+	let wikiFailure = null;
 
 	// Check this episode and the previous 4 (5 total)
 	const episodesToCheck = [
@@ -180,8 +160,10 @@ async function checkAndUpdatePreviousEpisodes(env, latestEpisodeNumber) {
 			if (res.status !== 'ok') {
 				if (res.status === 'no-data') {
 					logMessage(`Episode ${episodeNumber} recheck: page has no episode data.`);
-				} else if (res.status === 'timeout') {
-					logMessage(`Episode ${episodeNumber} recheck: temporary fetch issue (timeout/unavailable).`);
+				} else if (res.status === 'unavailable') {
+					wikiFailure = res;
+					logMessage(`Episode ${episodeNumber} recheck: wiki unavailable; stopping this recheck batch.`);
+					break;
 				}
 				continue;
 			}
@@ -223,7 +205,7 @@ async function checkAndUpdatePreviousEpisodes(env, latestEpisodeNumber) {
 		}
 	}
 
-	return updatedEpisodes;
+	return { updatedEpisodes, wikiFailure };
 }
 
 function findChanges(oldEpisode, newEpisode) {
@@ -350,9 +332,10 @@ async function auditHistoricEpisodes(env) {
 
 	const stats = await getAuditStats(env);
 	const startTime = Date.now();
-	const startEpisode = currentEpisode;
 	let episodesProcessed = 0;
 	let retriesProcessed = 0;
+	let wikiFailure = null;
+	let wikiResponded = false;
 
 	if (phase === 'scan' && currentEpisode > maxEpisode) {
 		phase = 'retry';
@@ -367,23 +350,27 @@ async function auditHistoricEpisodes(env) {
 	if (phase === 'scan') {
 		for (let i = 0; i < AUDIT_BATCH_SIZE && currentEpisode + i <= maxEpisode; i++) {
 			const episodeNumber = currentEpisode + i;
+			let stopAfterEpisode = false;
 
 			try {
 				// Fetch latest version from wiki
 				const res = await internalGetEpisode({ episodeNumber, isUpdate: true });
+				if (res.status === 'unavailable') wikiFailure = res;
+				else wikiResponded = true;
 
 				if (res.status === 'no-data') {
 					// Episode exists with no data (early series etc.)
 					stats.missing++;
 					addToMissingRanges(stats.missingRanges, episodeNumber);
 					logMessage(`Episode ${episodeNumber}: no-data page`);
-				} else if (res.status === 'timeout') {
+				} else if (res.status === 'unavailable') {
 					// Temporary issue, queue for retry later (attempts start at 0)
 					const q = await getRetryQueue(env);
 					addUniqueRetry(q, episodeNumber);
 					await saveRetryQueue(env, q);
 					stats.retryQueued = q.length; // reflect current queue length
-					logMessage(`Episode ${episodeNumber}: queued for retry (timeout/unavailable)`);
+					logMessage(`Episode ${episodeNumber}: queued for retry (${res.reason})`);
+					stopAfterEpisode = true;
 					// Don't count as processed yet - will be counted when retry resolves
 				} else {
 					const { episode: newEpisode, data: newData } = res;
@@ -431,6 +418,10 @@ async function auditHistoricEpisodes(env) {
 
 				// episodesProcessed tracks scan progress, incremented after processing
 				episodesProcessed++;
+				if (stopAfterEpisode) {
+					logMessage('Stopping the audit batch after an availability failure to avoid repeated requests.');
+					break;
+				}
 
 				// Throttle to avoid overwhelming the wiki server
 				if (i < AUDIT_BATCH_SIZE - 1 && currentEpisode + i < maxEpisode) {
@@ -473,28 +464,36 @@ async function auditHistoricEpisodes(env) {
 			await env.CDOWN_KV.delete('AUDIT_PHASE');
 			await env.CDOWN_KV.delete('AUDIT_RETRY_QUEUE');
 			logMessage('Audit fully complete. Marked complete and cleaned retry state.');
-			return { complete: true };
+			return {
+				complete: true,
+				wikiHealth: wikiFailure ? { healthy: false, reason: wikiFailure.reason } : wikiResponded ? { healthy: true } : null,
+			};
 		}
 
 		// Process up to batch size from queue
 		const slice = queue.slice(0, AUDIT_BATCH_SIZE);
 		const remaining = queue.slice(AUDIT_BATCH_SIZE);
-		for (const item of slice) {
+		for (let itemIndex = 0; itemIndex < slice.length; itemIndex++) {
+			const item = slice[itemIndex];
 			const { episodeNumber } = item;
 			try {
 				const res = await internalGetEpisode({ episodeNumber, isUpdate: true });
-				if (res.status === 'timeout') {
+				if (res.status === 'unavailable') wikiFailure = res;
+				else wikiResponded = true;
+				if (res.status === 'unavailable') {
 					item.attempts += 1;
 					if (item.attempts < 3) {
 						remaining.push(item);
 						logMessage(`Retry ${episodeNumber}: still unavailable (attempt ${item.attempts}/3), re-queue`);
 					} else {
 						stats.failed++;
-						stats.failedEpisodes.push({ episodeNumber, error: 'Timeout after 3 retry attempts' });
+						stats.failedEpisodes.push({ episodeNumber, error: `${res.reason} after 3 retry attempts` });
 						logMessage(`Retry ${episodeNumber}: failed after 3 attempts, giving up`);
 						retriesProcessed++;
 					}
-					continue;
+					remaining.push(...slice.slice(itemIndex + 1));
+					logMessage('Stopping the retry batch after an availability failure to avoid repeated requests.');
+					break;
 				}
 				if (res.status === 'no-data') {
 					// accept as missing, do not requeue
@@ -571,13 +570,12 @@ async function auditHistoricEpisodes(env) {
 	const reportPosition = phase === 'scan' ? (newCurrentEpisode <= maxEpisode ? newCurrentEpisode : maxEpisode) : maxEpisode;
 	await checkAndSendInterimReport(env, stats, reportPosition);
 
-	return { phase, episodesProcessed, stats, isDryRun };
 	return {
-		startEpisode,
-		endEpisode: newCurrentEpisode - 1,
+		phase,
 		episodesProcessed,
 		stats,
 		isDryRun,
+		wikiHealth: wikiFailure ? { healthy: false, reason: wikiFailure.reason } : wikiResponded ? { healthy: true } : null,
 	};
 }
 
@@ -715,16 +713,23 @@ const getNextEpisode = async (env) => {
 
 	const res = await internalGetEpisode({ episodeNumber });
 
-	if (res.status !== 'ok') {
+	if (res.status === 'unavailable') {
+		return { noNewEpisode: true, updatedEpisodes: [], wikiHealth: { healthy: false, reason: res.reason } };
+	}
+
+	if (res.status === 'no-data') {
 		// Even if no new episode, check previous episodes for updates
 		logMessage(`No new episode found (${episodeNumber}), but checking previous episodes for updates...`);
-		const updatedEpisodes = await checkAndUpdatePreviousEpisodes(env, episodeNumber - 1);
+		const recheck = await checkAndUpdatePreviousEpisodes(env, episodeNumber - 1);
 
-		if (updatedEpisodes.length > 0) {
-			logMessage(`Found ${updatedEpisodes.length} updated episode(s) in previous episodes.`);
-			return { updatedEpisodes, noNewEpisode: true };
+		if (recheck.updatedEpisodes.length > 0) {
+			logMessage(`Found ${recheck.updatedEpisodes.length} updated episode(s) in previous episodes.`);
 		}
-		return false;
+		return {
+			updatedEpisodes: recheck.updatedEpisodes,
+			noNewEpisode: true,
+			wikiHealth: recheck.wikiFailure ? { healthy: false, reason: recheck.wikiFailure.reason } : { healthy: true },
+		};
 	}
 
 	// New episode found - process it
@@ -742,28 +747,33 @@ const getNextEpisode = async (env) => {
 			logMessage(
 				`Episode ${episodeNumber} has identical rounds to yesterday (${yesterdayEpisodeNumber}) - likely copy/paste, waiting for next scrape`,
 			);
-			return false;
+			return { noNewEpisode: true, updatedEpisodes: [], wikiHealth: { healthy: true } };
 		}
 	}
 	const players = await doPlayers(env, episode);
 	const series = await doSeries(env, episode);
 
 	await env.CDOWN_BUCKET.put(`${episodeNumber}.json`, JSON.stringify(episode));
-	await env.CDOWN_KV.put('LAST_SUCCESSFUL_EPISODE_DATE', NEXT_EPISODE_TO_GET_DATE_AND_TIME.toISOString());
+	// Derive this from the episode we actually parsed. Advancing the old KV date
+	// allowed the date and episode number to remain permanently out of sync.
+	await env.CDOWN_KV.put('LAST_SUCCESSFUL_EPISODE_DATE', episodeDateForState(episode.d).toISOString());
 	await env.CDOWN_KV.put('LAST_SUCCESSFUL_EPISODE_NUMBER', episodeNumber);
 	await env.CDOWN_BUCKET.put(PLAYERS_FILE, JSON.stringify(players));
 	await env.CDOWN_BUCKET.put(SERIES_FILE, JSON.stringify(series));
 
 	// Also check previous episodes for updates
 	logMessage(`New episode ${episodeNumber} processed. Now checking previous episodes for updates...`);
-	const updatedEpisodes = await checkAndUpdatePreviousEpisodes(env, episodeNumber - 1);
+	const recheck = await checkAndUpdatePreviousEpisodes(env, episodeNumber - 1);
 
-	if (updatedEpisodes.length > 0) {
-		logMessage(`Found ${updatedEpisodes.length} updated episode(s) in previous episodes.`);
-		return { data, updatedEpisodes };
+	if (recheck.updatedEpisodes.length > 0) {
+		logMessage(`Found ${recheck.updatedEpisodes.length} updated episode(s) in previous episodes.`);
 	}
 
-	return { data };
+	return {
+		data,
+		updatedEpisodes: recheck.updatedEpisodes,
+		wikiHealth: recheck.wikiFailure ? { healthy: false, reason: recheck.wikiFailure.reason } : { healthy: true },
+	};
 };
 
 export default {
@@ -783,12 +793,13 @@ export default {
 		initLog();
 
 		// Check if this is an audit cron run
-		const isAuditRun = event.cron === '*/15 * * * *'; // Every 15 minutes
+		const isAuditRun = event.cron === AUDIT_CRON;
 
 		if (isAuditRun) {
 			// Run audit
 			try {
 				const auditResult = await auditHistoricEpisodes(env);
+				await updateWikiHealth(env, auditResult.wikiHealth, sendEmail);
 
 				if (auditResult.complete) {
 					// Final report already sent by generateFinalAuditReport
@@ -808,6 +819,9 @@ export default {
 		try {
 			result = await getNextEpisode(env);
 			if (!result) return;
+			await updateWikiHealth(env, result.wikiHealth, sendEmail);
+			if (result.wikiHealth?.healthy === false) return;
+			if (result.noNewEpisode && result.updatedEpisodes.length === 0) return;
 		} catch (e) {
 			logMessage(`Error: ${e.message}\n${e.stack}`);
 			await sendEmail(env, 'Countdown errors', getMessagesText(), getMessagesHtml());
@@ -892,8 +906,8 @@ export default {
 			const res = await internalGetEpisode({ episodeNumber: ep });
 
 			if (res.status !== 'ok') {
-				const msg = res.status === 'timeout' ? 'Episode fetch timed out/unavailable.' : 'Episode page has no data.';
-				return new Response(JSON.stringify({ message: msg, messages: getMessages() }), {
+				const msg = res.status === 'unavailable' ? `Wiki unavailable: ${res.reason}` : `Episode page has no data: ${res.reason}`;
+				return new Response(JSON.stringify({ status: res.status, message: msg, messages: getMessages() }), {
 					headers: {
 						'content-type': 'application/json;charset=UTF-8',
 					},
@@ -910,10 +924,10 @@ export default {
 
 			// Also check previous episodes for updates
 			logMessage(`Episode ${ep} processed. Now checking previous episodes for updates...`);
-			const updatedEpisodes = await checkAndUpdatePreviousEpisodes(env, ep - 1);
+			const recheck = await checkAndUpdatePreviousEpisodes(env, ep - 1);
 
 			const messages = getMessages();
-			return new Response(JSON.stringify({ messages, episode, data, updatedEpisodes }), {
+			return new Response(JSON.stringify({ messages, episode, data, updatedEpisodes: recheck.updatedEpisodes }), {
 				headers: {
 					'content-type': 'application/json;charset=UTF-8',
 				},

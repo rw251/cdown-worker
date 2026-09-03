@@ -1,7 +1,11 @@
 let messages = [];
 
 const initLog = () => (messages = []);
-const logMessage = (msg) => messages.push({ time: new Date().toISOString(), msg });
+const logMessage = (msg) => {
+	const entry = { time: new Date().toISOString(), msg };
+	messages.push(entry);
+	console.log(`[${entry.time}] ${msg}`);
+};
 
 // Plain text format with line breaks
 const getMessagesText = () => messages.map((m) => `[${m.time.substr(11, 8)}] ${m.msg}`).join('\n');

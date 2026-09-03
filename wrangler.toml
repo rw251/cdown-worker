@@ -25,5 +25,5 @@ send_email = [
 # Cron Triggers
 [triggers]
 # Every hour every day at minute 1 - regular episode fetch
-# Every 15 minutes - audit historic episodes
-crons = ["1 * * * *", "*/15 * * * *"]
+# Once an hour at minute 31 - paced historic episode audit
+crons = ["1 * * * *", "31 * * * *"]

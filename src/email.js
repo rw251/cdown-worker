@@ -59,13 +59,18 @@ const constructEmail = (to, subject, text, html) => {
 async function sendEmail(env, subject, text, html) {
 	const message = constructEmail(env.EMAILS_TO, subject, text, html);
 	const authKey = btoa(`api:${env.MAILGUN_API_KEY}`);
-	return fetch(`https://api.mailgun.net/v3/${DOMAIN}/messages`, {
+	const response = await fetch(`https://api.mailgun.net/v3/${DOMAIN}/messages`, {
 		headers: {
 			Authorization: `Basic ${authKey}`,
 		},
 		method: 'POST',
 		body: message,
-	}).then((x) => x.text());
+	});
+	const responseText = await response.text();
+	if (!response.ok) {
+		throw new Error(`Mailgun rejected email "${subject}": HTTP ${response.status} ${responseText.slice(0, 200)}`);
+	}
+	return responseText;
 }
 
 export { sendEmail };

@@ -2,16 +2,17 @@
 
 ## Overview
 
-The audit system automatically checks and updates historic Countdown episodes by comparing the current wiki content with stored data. It runs as a separate hourly cron job and processes about 120 episodes per hour. The start and end can be set in config.
+The audit system automatically checks and updates historic Countdown episodes by comparing the current wiki content with stored data. It runs as a separate hourly cron job and processes up to 10 episodes per hour. The start and end can be set in config.
 
 ## How It Works
 
-- **Cron Schedule**: Runs every 5 minutes (`*/5 * * * *`)
+- **Cron Schedule**: Runs once an hour at minute 31 (`31 * * * *`), away from the regular episode fetch
 - **Batch Size**: Processes 10 episodes per run
-- **Throttling**: 500ms delay between episode fetches to respect wiki server
+- **Throttling**: 2-second delay between episode fetches, plus MediaWiki's `maxlag` protection
 - **Storage**: Uses KV for state management and R2 for episode data
-- **Progress Reports**: Sends email updates every 4 hours
+- **Progress Reports**: Sends email updates every 8 hours
 - **Final Report**: Comprehensive email when complete with all updates
+- **Availability Alerts**: Sends one email when wiki reads start failing and another when they recover
 
 ## Starting an Audit
 
