@@ -77,7 +77,7 @@ async function internalGetEpisode({ episodeNumber, isUpdate = false }) {
 	if (!textarea || !textarea.length || textarea.length < 2) {
 		// Unexpected page content; log status/body snippet to distinguish real timeout from a block/rate-limit response
 		logMessage(
-			`Episode ${episodeNumber}: no textarea found. HTTP ${resp.status} ${resp.statusText}. Body snippet: ${html.slice(0, 300).replace(/\s+/g, ' ')}`
+			`Episode ${episodeNumber}: no textarea found. HTTP ${resp.status} ${resp.statusText}. Body snippet: ${html.slice(0, 300).replace(/\s+/g, ' ')}`,
 		);
 		return { status: 'timeout' };
 	}
@@ -834,7 +834,10 @@ export default {
 
 	async fetch(request, env) {
 		initLog();
-		if (request.url.indexOf('init') > -1) {
+		// Route on pathname only - request.url (hostname "cdown-get-latest") contains "get"
+		// so matching against the full URL string false-matches almost every route.
+		const { pathname } = new URL(request.url);
+		if (pathname.indexOf('init') > -1) {
 			const date = new Date();
 			date.setDate(date.getDate() - 30);
 			await env.CDOWN_KV.put('LAST_SUCCESSFUL_EPISODE_NUMBER', 8080);
@@ -843,14 +846,14 @@ export default {
 					'content-type': 'application/json;charset=UTF-8',
 				},
 			});
-		} else if (request.url.indexOf('log') > -1) {
+		} else if (pathname.indexOf('log') > -1) {
 			const log = await env.CDOWN_BUCKET.get('LOG').then((x) => x.json());
 			return new Response(JSON.stringify(log), {
 				headers: {
 					'content-type': 'application/json;charset=UTF-8',
 				},
 			});
-		} else if (request.url.indexOf('kv') > -1) {
+		} else if (pathname.indexOf('kv') > -1) {
 			const LAST_SUCCESSFUL_EPISODE_DATE = await env.CDOWN_KV.get('LAST_SUCCESSFUL_EPISODE_DATE');
 			const LAST_SUCCESSFUL_EPISODE_NUMBER = await env.CDOWN_KV.get('LAST_SUCCESSFUL_EPISODE_NUMBER');
 			return new Response(JSON.stringify({ LAST_SUCCESSFUL_EPISODE_DATE, LAST_SUCCESSFUL_EPISODE_NUMBER }), {
@@ -858,29 +861,29 @@ export default {
 					'content-type': 'application/json;charset=UTF-8',
 				},
 			});
-		} else if (request.url.indexOf('list') > -1) {
+		} else if (pathname.indexOf('list') > -1) {
 			const list = await env.CDOWN_BUCKET.list();
 			return new Response(JSON.stringify({ list }), {
 				headers: {
 					'content-type': 'application/json;charset=UTF-8',
 				},
 			});
-		} else if (request.url.indexOf('series') > -1) {
+		} else if (pathname.indexOf('series') > -1) {
 			const series = await env.CDOWN_BUCKET.get(SERIES_FILE).then((x) => x.json());
 			return new Response(JSON.stringify(series), {
 				headers: {
 					'content-type': 'application/json;charset=UTF-8',
 				},
 			});
-		} else if (request.url.indexOf('players') > -1) {
+		} else if (pathname.indexOf('players') > -1) {
 			const players = await env.CDOWN_BUCKET.get(PLAYERS_FILE).then((x) => x.json());
 			return new Response(JSON.stringify(players), {
 				headers: {
 					'content-type': 'application/json;charset=UTF-8',
 				},
 			});
-		} else if (request.url.indexOf('get') > -1) {
-			const ep = +request.url.split('/get')[1].replace(/[^0-9]/g, '');
+		} else if (/^\/get\/\d+/.test(pathname)) {
+			const ep = +pathname.match(/^\/get\/(\d+)/)[1];
 			const res = await internalGetEpisode({ episodeNumber: ep });
 
 			if (res.status !== 'ok') {
@@ -910,7 +913,7 @@ export default {
 					'content-type': 'application/json;charset=UTF-8',
 				},
 			});
-		} else if (request.url.indexOf('start-audit') > -1) {
+		} else if (pathname.indexOf('start-audit') > -1) {
 			// Initialize or update audit config and start
 			const url = new URL(request.url);
 			const minEpisode = parseInt(url.searchParams.get('min') || '1');
@@ -952,7 +955,7 @@ export default {
 					},
 				},
 			);
-		} else if (request.url.indexOf('audit-config') > -1) {
+		} else if (pathname.indexOf('audit-config') > -1) {
 			// Get or update audit config
 			if (request.method === 'POST') {
 				const body = await request.json();
@@ -976,7 +979,7 @@ export default {
 					},
 				});
 			}
-		} else if (request.url.indexOf('audit-status') > -1) {
+		} else if (pathname.indexOf('audit-status') > -1) {
 			const config = await getAuditConfig(env);
 			const currentEpisode = parseInt((await env.CDOWN_KV.get('AUDIT_CURRENT_EPISODE')) || '0');
 			const startTime = parseInt((await env.CDOWN_KV.get('AUDIT_START_TIME')) || '0');
@@ -1015,7 +1018,7 @@ export default {
 					},
 				},
 			);
-		} else if (request.url.indexOf('reset-audit') > -1) {
+		} else if (pathname.indexOf('reset-audit') > -1) {
 			await env.CDOWN_KV.delete('AUDIT_CURRENT_EPISODE');
 			await env.CDOWN_KV.delete('AUDIT_START_TIME');
 			await env.CDOWN_KV.delete('AUDIT_LAST_REPORT_TIME');
