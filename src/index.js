@@ -826,9 +826,6 @@ export default {
 	},
 
 	async fetch(request, env) {
-		let result = await getNextEpisode(env);
-		console.log(getMessages());
-		return;
 		initLog();
 		if (request.url.indexOf('init') > -1) {
 			const date = new Date();
