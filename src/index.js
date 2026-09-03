@@ -888,7 +888,7 @@ export default {
 
 			if (res.status !== 'ok') {
 				const msg = res.status === 'timeout' ? 'Episode fetch timed out/unavailable.' : 'Episode page has no data.';
-				return new Response(JSON.stringify({ message: msg }), {
+				return new Response(JSON.stringify({ message: msg, messages: getMessages() }), {
 					headers: {
 						'content-type': 'application/json;charset=UTF-8',
 					},
