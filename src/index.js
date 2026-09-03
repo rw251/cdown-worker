@@ -57,9 +57,13 @@ async function internalGetEpisode({ episodeNumber, isUpdate = false }) {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), 10000);
 	let html;
+	let resp;
 	try {
-		const resp = await fetch(`${apterousUrl}?title=Episode_${episodeNumber}&action=edit`, { signal: controller.signal });
+		resp = await fetch(`${apterousUrl}?title=Episode_${episodeNumber}&action=edit`, { signal: controller.signal });
 		clearTimeout(timeout);
+		if (!resp.ok) {
+			logMessage(`Non-OK response for episode ${episodeNumber}: HTTP ${resp.status} ${resp.statusText}`);
+		}
 		html = await resp.text();
 	} catch (err) {
 		clearTimeout(timeout);
@@ -71,7 +75,10 @@ async function internalGetEpisode({ episodeNumber, isUpdate = false }) {
 
 	const textarea = html.match(/wpTextbox1[^>]+>([\s\S]+)<\/textarea>/);
 	if (!textarea || !textarea.length || textarea.length < 2) {
-		// Unexpected page content; treat as temporary/unavailable
+		// Unexpected page content; log status/body snippet to distinguish real timeout from a block/rate-limit response
+		logMessage(
+			`Episode ${episodeNumber}: no textarea found. HTTP ${resp.status} ${resp.statusText}. Body snippet: ${html.slice(0, 300).replace(/\s+/g, ' ')}`
+		);
 		return { status: 'timeout' };
 	}
 	const data = textarea[1];
@@ -349,7 +356,7 @@ async function auditHistoricEpisodes(env) {
 	}
 
 	logMessage(
-		`${isDryRun ? '[DRY RUN] ' : ''}Audit batch (${phase}) starting from ${phase === 'scan' ? 'episode ' + currentEpisode : 'retry queue'}`
+		`${isDryRun ? '[DRY RUN] ' : ''}Audit batch (${phase}) starting from ${phase === 'scan' ? 'episode ' + currentEpisode : 'retry queue'}`,
 	);
 
 	if (phase === 'scan') {
@@ -552,7 +559,7 @@ async function auditHistoricEpisodes(env) {
 	logMessage(
 		`Stats: ${stats.updated} updated, ${stats.unchanged} unchanged, ${stats.missing} missing, ${stats.failed} failed, ${
 			stats.retryQueued || 0
-		} currently queued for retry`
+		} currently queued for retry`,
 	);
 
 	// Interim report considers phase and position
@@ -689,7 +696,7 @@ const getNextEpisode = async (env) => {
 		// Write log and exit
 		await log(
 			env,
-			`${NOW}: Last success was on ${LAST_SUCCESSFUL_EPISODE_DATE}. Next episode check at ${NEXT_EPISODE_TO_GET_DATE_AND_TIME}. In the future so stopping.`
+			`${NOW}: Last success was on ${LAST_SUCCESSFUL_EPISODE_DATE}. Next episode check at ${NEXT_EPISODE_TO_GET_DATE_AND_TIME}. In the future so stopping.`,
 		);
 		await writeLog(env);
 		return false;
@@ -728,7 +735,7 @@ const getNextEpisode = async (env) => {
 		const yesterdayRounds = JSON.stringify(yesterdayEpisode.r);
 		if (todayRounds === yesterdayRounds) {
 			logMessage(
-				`Episode ${episodeNumber} has identical rounds to yesterday (${yesterdayEpisodeNumber}) - likely copy/paste, waiting for next scrape`
+				`Episode ${episodeNumber} has identical rounds to yesterday (${yesterdayEpisodeNumber}) - likely copy/paste, waiting for next scrape`,
 			);
 			return false;
 		}
@@ -943,7 +950,7 @@ export default {
 					headers: {
 						'content-type': 'application/json;charset=UTF-8',
 					},
-				}
+				},
 			);
 		} else if (request.url.indexOf('audit-config') > -1) {
 			// Get or update audit config
@@ -1006,7 +1013,7 @@ export default {
 					headers: {
 						'content-type': 'application/json;charset=UTF-8',
 					},
-				}
+				},
 			);
 		} else if (request.url.indexOf('reset-audit') > -1) {
 			await env.CDOWN_KV.delete('AUDIT_CURRENT_EPISODE');
@@ -1027,7 +1034,7 @@ export default {
 					headers: {
 						'content-type': 'application/json;charset=UTF-8',
 					},
-				}
+				},
 			);
 		} else {
 			// let data;
